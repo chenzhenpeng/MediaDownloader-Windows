@@ -2,6 +2,7 @@ import json
 import stat
 import subprocess
 import sys
+import time
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -256,6 +257,49 @@ def test_update_lock_is_exclusive(signed_release):
     with update_lock(store.root), pytest.raises(UpdateError):
         with update_lock(store.root):
             pass
+
+
+def test_engine_https_download_validates_bounded_ranges(tmp_path):
+    block = 4 * 1024**2
+    payload = b"".join(bytes([i]) * block for i in range(6)) + b"last-part"
+    requests = []
+
+    def transport(request):
+        start, end = map(int, request.headers["range"].removeprefix("bytes=").split("-"))
+        requests.append((start, end))
+        if start == block:
+            time.sleep(0.05)  # Later responses finish first; archive order must remain correct.
+        return httpx.Response(
+            206,
+            headers={"Content-Range": f"bytes {start}-{end}/{len(payload)}"},
+            stream=httpx.ByteStream(payload[start : end + 1]),
+        )
+
+    trust = Trust("stable", {}, ("updates.example",))
+    feed = UpdateFeed(trust, transport=httpx.MockTransport(transport))
+    path = feed.download(
+        {"artifact_url": "https://updates.example/zip", "size_bytes": len(payload)}, tmp_path
+    )
+    assert path.read_bytes() == payload
+    assert sorted(requests) == [
+        (start, min(start + block, len(payload)) - 1) for start in range(0, len(payload), block)
+    ]
+
+
+@pytest.mark.parametrize("content_range,body", [("bytes 1-3/3", b"abc"), ("bytes 0-2/3", b"ab")])
+def test_engine_https_download_rejects_inconsistent_range(tmp_path, content_range, body):
+    trust = Trust("stable", {}, ("updates.example",))
+    feed = UpdateFeed(
+        trust,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                206, headers={"Content-Range": content_range}, stream=httpx.ByteStream(body)
+            )
+        ),
+    )
+    with pytest.raises(UpdateError):
+        feed.download({"artifact_url": "https://updates.example/zip", "size_bytes": 3}, tmp_path)
+    assert not list(tmp_path.iterdir())
 
 
 def fixture_engine(version):

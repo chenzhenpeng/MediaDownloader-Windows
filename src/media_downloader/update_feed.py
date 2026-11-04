@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -16,31 +18,100 @@ class UpdateFeed:
     def __init__(self, trust, *, transport=None):
         self.trust, self.transport = trust, transport
 
-    def chunks(self, url, *, cancelled=lambda: False):
+    def chunks(self, url, *, cancelled=lambda: False, expected_size=None, start=0, end_limit=None):
         try:
             with httpx.Client(
-                timeout=httpx.Timeout(20, connect=10),
+                timeout=httpx.Timeout(30, connect=10),
                 trust_env=False,
                 transport=self.transport,
                 headers={"Accept-Encoding": "identity"},
             ) as client:
-                for _ in range(5):
-                    self.trust.check_url(url)
-                    with client.stream("GET", url) as response:
-                        if response.is_redirect:
-                            url = urljoin(url, response.headers.get("location", ""))
-                            continue
-                        response.raise_for_status()
-                        if response.headers.get("content-encoding", "identity").lower() != "identity":
-                            fail("UPDATE_NETWORK", "更新服务器返回了不支持的传输编码。")
-                        for chunk in response.iter_raw(65536):
-                            if cancelled():
-                                fail("UPDATE_CANCELLED", "更新已取消。")
-                            yield chunk
-                        return
-                fail("UPDATE_NETWORK", "更新地址跳转次数过多。")
+                position = start
+                while True:
+                    end = min(position + 4 * 1024**2, expected_size) - 1 if expected_size else None
+                    if end_limit is not None:
+                        end = min(end, end_limit)
+                    headers = {"Range": f"bytes={position}-{end}"} if expected_size else {}
+                    for _ in range(5):
+                        if cancelled():
+                            fail("UPDATE_CANCELLED", "更新已取消。")
+                        self.trust.check_url(url)
+                        with client.stream("GET", url, headers=headers) as response:
+                            if response.is_redirect:
+                                url = urljoin(url, response.headers.get("location", ""))
+                                continue
+                            response.raise_for_status()
+                            partial = response.status_code == 206
+                            if partial:
+                                expected_range = f"bytes {position}-{end}/{expected_size}"
+                                if (
+                                    not expected_size
+                                    or response.headers.get("content-range") != expected_range
+                                ):
+                                    fail("UPDATE_NETWORK", "更新服务器返回了不匹配的文件分段。")
+                            elif position:
+                                fail("UPDATE_NETWORK", "更新服务器未继续返回请求的文件分段。")
+                            if response.headers.get("content-encoding", "identity").lower() != "identity":
+                                fail("UPDATE_NETWORK", "更新服务器返回了不支持的传输编码。")
+                            count = 0
+                            for chunk in response.iter_raw(65536):
+                                if cancelled():
+                                    fail("UPDATE_CANCELLED", "更新已取消。")
+                                count += len(chunk)
+                                if partial and count > end - position + 1:
+                                    fail("UPDATE_HASH", "更新文件分段超出预期大小。")
+                                yield chunk
+                            if not partial:
+                                return  # Servers without Range support may return the complete body.
+                            if count != end - position + 1:
+                                fail("UPDATE_HASH", "更新文件分段不完整。")
+                            position += count
+                            if position == expected_size or end_limit is not None and position > end_limit:
+                                return
+                            break
+                    else:
+                        fail("UPDATE_NETWORK", "更新地址跳转次数过多。")
         except httpx.HTTPError as exc:
             raise UpdateError("UPDATE_NETWORK", "无法连接更新源，请检查网络后重试。") from exc
+
+    def artifact_chunks(self, url, total, *, cancelled=lambda: False):
+        block = 4 * 1024**2
+        first = 0
+        for chunk in self.chunks(
+            url, cancelled=cancelled, expected_size=total, end_limit=min(block, total) - 1
+        ):
+            first += len(chunk)
+            yield chunk
+        if first == total:
+            return  # Includes full-body fallback when Range is unsupported.
+
+        def fetch(start):
+            return b"".join(
+                self.chunks(
+                    url,
+                    cancelled=cancelled,
+                    expected_size=total,
+                    start=start,
+                    end_limit=min(start + block, total) - 1,
+                )
+            )
+
+        # Bound buffered responses and preserve archive order despite parallel requests.
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="engine-range") as pool:
+            pending = deque()
+            starts = iter(range(first, total, block))
+            for start in starts:
+                pending.append(pool.submit(fetch, start))
+                if len(pending) == 4:
+                    break
+            while pending:
+                body = pending.popleft().result()
+                if cancelled():
+                    fail("UPDATE_CANCELLED", "更新已取消。")
+                yield body
+                start = next(starts, None)
+                if start is not None:
+                    pending.append(pool.submit(fetch, start))
 
     def bounded(self, url, maximum, *, cancelled=lambda: False):
         data = bytearray()
@@ -89,7 +160,7 @@ class UpdateFeed:
                             output.write(chunk)
                             progress(done, total)
                 else:
-                    for chunk in self.chunks(manifest["artifact_url"], cancelled=cancelled):
+                    for chunk in self.artifact_chunks(manifest["artifact_url"], total, cancelled=cancelled):
                         done += len(chunk)
                         if done > total:
                             fail("UPDATE_HASH", "更新包大小超出签名清单。")
