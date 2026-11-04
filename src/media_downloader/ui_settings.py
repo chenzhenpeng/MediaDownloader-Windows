@@ -1,0 +1,137 @@
+"""Settings grouped as Windows-style rows, with connection and component details on demand."""
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QAbstractSpinBox, QFormLayout, QHBoxLayout, QLineEdit, QSpinBox
+
+from . import __version__
+from .engine import tool_versions
+from .platforms import PLATFORMS
+from .ui_components import ComboBox, Expander, InfoBar, SettingRow, ToggleSwitch, command_button, label
+
+
+def build_settings(window, layout):
+    store = window.store
+    layout.addWidget(label("个性化", "section"))
+    window.theme = ComboBox()
+    window.theme.setFixedWidth(180)
+    for text, value in [("跟随 Windows", "system"), ("浅色", "light"), ("深色", "dark")]:
+        window.theme.addItem(text, value)
+    window.theme.setCurrentIndex(max(0, window.theme.findData(store.setting("theme", "system"))))
+    window.theme.currentIndexChanged.connect(window.change_theme)
+    layout.addWidget(SettingRow("应用主题", "Windows 对比度主题将优先生效", window.theme, "\ue790"))
+    layout.addSpacing(12)
+    layout.addWidget(label("下载", "section"))
+    directory = command_button("更改…", window.choose_output)
+    window.directory_info = label(window.output.text(), "secondary")
+    row = SettingRow("默认保存位置", "按平台和帖子分文件夹保存，图集按原帖顺序编号。", directory, "\ue8b7")
+    row.layout().itemAt(1).layout().addWidget(window.directory_info)
+    window.output.textChanged.connect(window.directory_info.setText)
+    layout.addWidget(row)
+    window.workers = QSpinBox()
+    window.workers.setRange(1, 4)
+    window.workers.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+    window.workers.setFixedWidth(44)
+    window.workers.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    window.workers.setAccessibleName("同时处理的任务数")
+    window.workers.setValue(store.setting("max_workers", 2))
+    window.workers.valueChanged.connect(lambda value: store.set_setting("max_workers", value))
+    stepper = QHBoxLayout()
+    stepper.setSpacing(4)
+    minus = command_button("−", window.workers.stepDown)
+    plus = command_button("+", window.workers.stepUp)
+    for item, text in [(minus, "减少并发数"), (plus, "增加并发数")]:
+        item.setFixedWidth(34)
+        item.setAccessibleName(text)
+    stepper.addWidget(minus)
+    stepper.addWidget(window.workers)
+    stepper.addWidget(plus)
+    layout.addWidget(SettingRow("同时处理的任务数", "下次启动时生效", stepper, "\ue8fd"))
+    layout.addSpacing(12)
+    layout.addWidget(label("平台连接", "section"))
+    window.connection_expander = Expander(
+        "代理与登录凭据", "为每个平台分别管理连接设置。Cookie 由 Windows 加密保存。"
+    )
+    box = window.connection_expander.content
+    form = QFormLayout()
+    form.setVerticalSpacing(14)
+    form.setLabelAlignment(Qt.AlignmentFlag.AlignVCenter)
+    window.platform = ComboBox()
+    for value, spec in PLATFORMS.items():
+        window.platform.addItem(spec.name, value)
+    window.platform.setAccessibleName("平台连接设置")
+    form.addRow("平台", window.platform)
+    window.proxy = QLineEdit()
+    window.proxy.setAccessibleName("代理地址")
+    window.proxy.setPlaceholderText("直连，或输入 http://127.0.0.1:7890")
+    form.addRow("代理", window.proxy)
+    window.cookie = QLineEdit()
+    window.cookie.setAccessibleName("平台 Cookie")
+    window.cookie.setEchoMode(QLineEdit.EchoMode.Password)
+    window.cookie.setPlaceholderText("输入新 Cookie，留空保留已有凭据")
+    form.addRow("Cookie", window.cookie)
+    box.addLayout(form)
+    actions = QHBoxLayout()
+    actions.addWidget(command_button("保存连接设置", window.save_connection, primary=True))
+    actions.addWidget(command_button("删除 Cookie", window.delete_cookie))
+    actions.addStretch()
+    box.addLayout(actions)
+    window.connection_info = label("", "secondary")
+    box.addWidget(window.connection_info)
+    window.platform.currentIndexChanged.connect(window.load_connection)
+    layout.addWidget(window.connection_expander)
+    layout.addSpacing(12)
+    layout.addWidget(label("更新", "section"))
+    window.update_check = command_button("检查更新", lambda: window.updates and window.updates.check())
+    window.kernel_version = label(window.service.engine.version, "secondary")
+    row = SettingRow("解析内核", "独立更新解析能力，无需重装应用", window.update_check, "\ue895")
+    row.layout().itemAt(1).layout().addWidget(window.kernel_version)
+    window.update_status = label("", "secondary")
+    row.layout().itemAt(1).layout().addWidget(window.update_status)
+    layout.addWidget(row)
+    window.update_info = InfoBar()
+    window.update_notes = label("")
+    layout.addWidget(window.update_info)
+    layout.addWidget(window.update_notes)
+    window.update_install = command_button(
+        "安装内核更新", lambda: window.updates and window.updates.install(), primary=True
+    )
+    window.update_cancel = command_button("取消更新", lambda: window.updates and window.updates.cancel())
+    actions = QHBoxLayout()
+    actions.addWidget(window.update_install)
+    actions.addWidget(window.update_cancel)
+    actions.addStretch()
+    layout.addLayout(actions)
+    options = window.update_options = Expander("更新选项")
+    window.update_auto = ToggleSwitch("每 24 小时检查更新")
+    window.update_auto.setChecked(store.setting("update_auto_check", False))
+    window.update_auto.toggled.connect(lambda checked: store.set_setting("update_auto_check", checked))
+    options.content.addWidget(SettingRow("自动检查", "每 24 小时检查，仅提示可用更新", window.update_auto))
+    window.update_pin = ToggleSwitch("锁定当前内核")
+    window.update_pin.setChecked(store.setting("engine_update_locked", False))
+    window.update_pin.toggled.connect(window.pin_engine)
+    options.content.addWidget(SettingRow("锁定当前内核", "暂停安装与手动回滚", window.update_pin))
+    window.update_rollback = command_button("回滚上一版本", window.rollback_engine)
+    options.content.addWidget(SettingRow("恢复上一版本", "保留任务与已下载文件", window.update_rollback))
+    layout.addWidget(options)
+    layout.addSpacing(12)
+    layout.addWidget(label("关于", "section"))
+    layout.addWidget(SettingRow("Media Downloader", f"版本 {__version__} · 开发预览版", glyph="\ue946"))
+    components = Expander("组件信息与诊断")
+    window.engine_version_info = label("", "secondary")
+    components.content.addWidget(window.engine_version_info)
+    versions = tool_versions(window.service.engine)
+    window.tool_info = label(
+        "\n".join(f"{key}  {value}" for key, value in versions.items()) or "源码运行使用开发环境工具。",
+        "secondary",
+    )
+    components.content.addWidget(window.tool_info)
+    components.content.addWidget(command_button("导出诊断记录…", window.export_diagnostics))
+    components.content.addWidget(
+        label("诊断仅包含版本、状态、错误码和时间，不包含链接与登录凭据。", "caption")
+    )
+    layout.addWidget(components)
+    layout.addStretch()
+    if window.updates:
+        window.updates.changed.connect(window.refresh_update)
+    window.refresh_update()
+    window.load_connection()

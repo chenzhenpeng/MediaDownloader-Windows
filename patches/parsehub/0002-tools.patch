@@ -1,0 +1,88 @@
+diff --git a/src/parsehub/errors.py b/src/parsehub/errors.py
+index 17446d1..bfed7a0 100644
+--- a/src/parsehub/errors.py
++++ b/src/parsehub/errors.py
+@@ -93,6 +93,12 @@ class DownloadFallbackError(DownloadError):
+         Exception.__init__(self, f"{self.MSG}:\n{format_attempts(attempts)}")
+ 
+ 
++class ToolExecutionError(DownloadError):
++    """外部媒体工具执行失败"""
++
++    MSG = __doc__
++
++
+ class DeleteError(ParseHubError):
+     """删除文件错误"""
+ 
+diff --git a/src/parsehub/parsers/base/ytdlp.py b/src/parsehub/parsers/base/ytdlp.py
+index a8164ff..96c35a8 100644
+--- a/src/parsehub/parsers/base/ytdlp.py
++++ b/src/parsehub/parsers/base/ytdlp.py
+@@ -13,6 +13,8 @@ from typing import Any, cast
+ 
+ from loguru import logger
+ 
++from ...errors import ToolExecutionError
++
+ from ...types import (
+     DownloadError,
+     DownloadResult,
+@@ -91,13 +93,19 @@ class MonotonicDownloadProgress:
+ 
+ 
+ def _yt_dlp_base_cmd() -> list[str]:
++    if tool := os.environ.get("MEDIA_DOWNLOADER_YTDLP"):
++        if not Path(tool).is_file():
++            raise FileNotFoundError("Configured yt-dlp executable is missing")
++        return [tool]
++    if getattr(sys, "frozen", False):
++        raise RuntimeError("Frozen worker requires an explicit yt-dlp executable")
+     return [sys.executable, "-m", "yt_dlp"]
+ 
+ 
+ def _subprocess_kwargs() -> dict[str, Any]:
+     if os.name == "posix":
+         return {"start_new_session": True}
+-    return {}
++    return {"creationflags": 0x08000000} if os.name == "nt" else {}
+ 
+ 
+ async def _terminate_process(proc: asyncio.subprocess.Process) -> None:
+@@ -271,7 +279,7 @@ async def _run_ytdlp_json(
+     stdout_text = _decode_output(stdout)
+     stderr_text = _decode_output(stderr)
+     if proc.returncode:
+-        raise RuntimeError(_ytdlp_error(proc.returncode, _tail_from_text(stdout_text), _tail_from_text(stderr_text)))
++        raise ToolExecutionError(_ytdlp_error(proc.returncode, _tail_from_text(stdout_text), _tail_from_text(stderr_text)))
+ 
+     try:
+         return _json_from_stdout(stdout_text)
+@@ -362,7 +370,7 @@ async def _run_ytdlp_download(
+             raise
+ 
+     if returncode:
+-        raise RuntimeError(_ytdlp_error(returncode, stdout_tail, stderr_tail))
++        raise ToolExecutionError(_ytdlp_error(returncode, stdout_tail, stderr_tail))
+ 
+ 
+ class YtParser(BaseParser, register=False):
+@@ -445,6 +453,8 @@ class YtParser(BaseParser, register=False):
+             "--dump-single-json",
+             "--no-download",
+             "--no-warnings",
++            "--socket-timeout", "20",
++            "--retries", "2",
+         ]
+ 
+ 
+@@ -465,6 +475,9 @@ class YtVideoParseResult(VideoParseResult):
+         return [
+             "--quiet",  # 不输出日志
+             "--no-progress",  # 不输出下载进度
++            "--socket-timeout", "30",
++            "--retries", "3",
++            "--fragment-retries", "3",
+         ]
+ 
+     async def _do_download(

@@ -1,0 +1,79 @@
+name: Build and sign reviewed engine draft
+on:
+  workflow_dispatch:
+    inputs:
+      engine_version:
+        description: Immutable engine version
+        type: string
+        required: true
+      sequence:
+        description: Strictly increasing stable manifest sequence
+        type: number
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: engine-release
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short
+      - name: Fetch reviewed tool bundle
+        env:
+          ENGINE_TOOLS_URL: ${{ vars.ENGINE_TOOLS_URL }}
+          ENGINE_TOOLS_SHA256: ${{ vars.ENGINE_TOOLS_SHA256 }}
+        run: uv run --no-sync python scripts/fetch_build_tools.py
+      - name: Freeze engine and client for acceptance
+        env:
+          CANDIDATE_VERSION: ${{ inputs.engine_version }}
+        run: uv run --no-sync python scripts/build_m0.py --milestone m4 --engine-version $env:CANDIDATE_VERSION --ffmpeg-dir .cache/ffmpeg/bin
+      - run: uv run --no-sync python scripts/check_m0.py --milestone m4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: reviewed-unsigned-engine
+          path: dist/m4/media-engine
+          retention-days: 7
+  sign-draft:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: engine-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: reviewed-unsigned-engine
+          path: build/unsigned-engine
+      - name: Sign only after the protected environment is approved
+        env:
+          ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
+          ENGINE_KEY_ID: ${{ vars.ENGINE_KEY_ID }}
+          CANDIDATE_VERSION: ${{ inputs.engine_version }}
+          RELEASE_SEQUENCE: ${{ inputs.sequence }}
+        run: |
+          $artifactUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/engine-$env:CANDIDATE_VERSION/engine.zip"
+          uv run --no-sync python scripts/release_engine.py build/unsigned-engine --output build/signed-feed --key-id $env:ENGINE_KEY_ID --sequence $env:RELEASE_SEQUENCE --artifact-url $artifactUrl --channel stable
+      - name: Create a reviewable draft; publication remains manual
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_VERSION: ${{ inputs.engine_version }}
+        run: |
+          Set-Content -LiteralPath build/release-notes.md -Value 'Signed engine candidate. Confirm live platform samples, licenses, signature/public-key configuration and clean-machine acceptance before publishing.' -Encoding utf8
+          gh release create "engine-$env:CANDIDATE_VERSION" build/signed-feed/engine.zip build/signed-feed/release.json build/signed-feed/release.sig --draft --title "Engine $env:CANDIDATE_VERSION" --notes-file build/release-notes.md

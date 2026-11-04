@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window x:Class="MediaDownloader.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="using:MediaDownloader" Title="Media Downloader">
+ <Window.SystemBackdrop><MicaBackdrop /></Window.SystemBackdrop>
+ <Grid x:Name="Root">
+  <Grid.Resources>
+   <DataTemplate x:Key="TaskTemplate">
+    <Grid MinHeight="94" Padding="16,12" ColumnSpacing="16" CornerRadius="6">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
+     <Border Height="56" Width="56" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+      <Grid>
+       <FontIcon Glyph="&#xE8A5;" FontSize="22" Visibility="{Binding PlaceholderVisibility}" />
+       <Image Source="{Binding Image}" Stretch="UniformToFill" Visibility="{Binding ImageVisibility}" />
+      </Grid>
+     </Border>
+     <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+      <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxLines="1" FontWeight="SemiBold"/>
+      <TextBlock Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" Style="{StaticResource SecondaryText}"/>
+      <TextBlock Text="{Binding StatusLine}" Style="{StaticResource CaptionTextBlockStyle}"/>
+      <ProgressBar Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}" Visibility="{Binding ProgressVisibility}" Height="3"/>
+      <TextBlock Text="{Binding Progress}" TextTrimming="CharacterEllipsis" Style="{StaticResource CaptionTextBlockStyle}" Visibility="{Binding ProgressVisibility}"/>
+     </StackPanel>
+     <Button Grid.Column="2" Content="{Binding PrimaryLabel}" IsEnabled="{Binding PrimaryEnabled}" Click="TaskPrimary_Click" VerticalAlignment="Center" MinWidth="80"/>
+     <Button Grid.Column="3" Click="TaskMore_Click" ToolTipService.ToolTip="更多操作" AutomationProperties.Name="更多任务操作" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Padding="6">
+      <FontIcon Glyph="&#xE712;" FontSize="16"/>
+     </Button>
+    </Grid>
+   </DataTemplate>
+  </Grid.Resources>
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+  <TitleBar x:Name="AppTitleBar" Title="Media Downloader">
+   <TitleBar.IconSource><ImageIconSource ImageSource="Assets/AppIcon.png"/></TitleBar.IconSource>
+  </TitleBar>
+  <NavigationView x:Name="Nav" Grid.Row="1" IsBackButtonVisible="Collapsed" IsSettingsVisible="True"
+   OpenPaneLength="200" CompactPaneLength="56" PaneDisplayMode="Auto" SelectionChanged="Nav_SelectionChanged"
+   CompactModeThresholdWidth="1000" ExpandedModeThresholdWidth="1150" IsPaneToggleButtonVisible="True">
+   <NavigationView.MenuItems>
+    <NavigationViewItem Content="新建下载" Tag="home" Icon="Add"/>
+    <NavigationViewItem Content="下载管理" Tag="downloads" Icon="Download">
+     <NavigationViewItem.InfoBadge><InfoBadge x:Name="DownloadBadge" Value="0" Visibility="Collapsed"/></NavigationViewItem.InfoBadge>
+    </NavigationViewItem>
+   </NavigationView.MenuItems>
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <InfoBar x:Name="GlobalNotice" IsOpen="False" IsClosable="True" Severity="Error" Margin="32,8,32,0"/>
+    <Grid x:Name="ContentHost" Grid.Row="1" Margin="32,16,32,24"/>
+   </Grid>
+  </NavigationView>
+ </Grid>
+</Window>
+

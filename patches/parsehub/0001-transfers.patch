@@ -1,0 +1,146 @@
+diff --git a/src/parsehub/types/result.py b/src/parsehub/types/result.py
+index a3de987..a4ddaf3 100644
+--- a/src/parsehub/types/result.py
++++ b/src/parsehub/types/result.py
+@@ -1,4 +1,5 @@
+ import asyncio
++import errno
+ import json
+ import shutil
+ import time
+@@ -84,7 +85,8 @@ class ParseResult(ABC):  # noqa: B024
+ 
+     def _download_stop(self, e: Exception) -> bool:
+         """下载失败时是否不再尝试后面的备用链接, 平台可覆盖"""
+-        return False
++        return (getattr(e, "retryable", None) is False
++                or isinstance(e, OSError) and e.errno in {errno.ENOSPC, errno.EACCES, errno.EPERM})
+ 
+     async def _do_download(
+         self,
+@@ -220,7 +222,7 @@ class ParseResult(ABC):  # noqa: B024
+                 results[i] = mf
+                 completed += 1
+                 if callback:
+-                    await callback(completed, n, "count", *callback_args)
++                    await callback(completed, n, "count", *callback_args, **(callback_kwargs or {}))
+                 return mf
+ 
+         tasks = [asyncio.create_task(_download_one(i, media)) for i, media in enumerate(media_list)]
+@@ -273,10 +275,13 @@ class ParseResult(ABC):  # noqa: B024
+         save_dir = Path(path) if path else GlobalConfig.default_save_dir
+         output_dir = save_dir.joinpath(self.name)
+         counter = 2
+-        while output_dir.exists():
+-            output_dir = save_dir.joinpath(f"{self.name}_{counter}")
+-            counter += 1
+-        output_dir.mkdir(parents=True, exist_ok=True)
++        while True:
++            try:
++                output_dir.mkdir(parents=True, exist_ok=False)
++                break
++            except FileExistsError:
++                output_dir = save_dir.joinpath(f"{self.name}_{counter}")
++                counter += 1
+ 
+         if save_metadata:
+             async with aiofiles.open(output_dir.joinpath("metadata.json"), "w", encoding="utf-8") as f:
+@@ -292,9 +297,9 @@ class ParseResult(ABC):  # noqa: B024
+                 connections=connections,
+                 concurrency=concurrency,
+             )
+-        except Exception as e:
++        except BaseException:
+             shutil.rmtree(output_dir, ignore_errors=True)
+-            raise e
++            raise
+ 
+     def download_sync(
+         self,
+diff --git a/src/parsehub/utils/downloader.py b/src/parsehub/utils/downloader.py
+index c962bc9..b33e919 100644
+--- a/src/parsehub/utils/downloader.py
++++ b/src/parsehub/utils/downloader.py
+@@ -1,4 +1,5 @@
+ import asyncio
++import errno
+ import math
+ import os
+ import re
+@@ -6,7 +7,7 @@ import shutil
+ import uuid
+ from collections.abc import Awaitable, Callable, Mapping
+ from dataclasses import dataclass
+-from pathlib import Path
++from pathlib import Path, PureWindowsPath
+ from typing import Any
+ from urllib.parse import unquote, urlparse
+ 
+@@ -44,6 +45,7 @@ class FallbackToSingle(Exception):
+ 
+ 
+ class SegmentDownloader:
++    request_guard = None  # Optional application-owned async HTTPX request hook.
+     def __init__(
+         self,
+         url: str,
+@@ -91,7 +93,7 @@ class SegmentDownloader:
+                     return str(self.resolved_path)
+             except DownloadError as e:
+                 last_error = e
+-                if attempt == self.max_retries:
++                if attempt == self.max_retries or (e.status_code is not None and not _is_retryable_status(e.status_code)):
+                     raise
+             except httpx.HTTPStatusError as e:
+                 last_error = e
+@@ -104,6 +106,10 @@ class SegmentDownloader:
+                 if attempt == self.max_retries:
+                     raise DownloadError(f"网络连接错误: {e}") from e
+             except Exception as e:
++                if getattr(e, "retryable", None) is False:
++                    raise
++                if isinstance(e, OSError) and e.errno in {errno.ENOSPC, errno.EACCES, errno.EPERM}:
++                    raise
+                 last_error = e
+                 if attempt == self.max_retries:
+                     raise DownloadError(f"{type(e).__name__}: {e}" if str(e) else type(e).__name__) from e
+@@ -121,7 +127,12 @@ class SegmentDownloader:
+             "headers": self.headers,
+             "proxy": self.proxy,
+             "limits": limits,
++            "max_redirects": 10,
++            "timeout": httpx.Timeout(30, connect=10, pool=10),
+         }
++        guard = type(self).request_guard
++        if guard:
++            kwargs["event_hooks"] = {"request": [guard]}
+         if self.timeout is not None:
+             kwargs["timeout"] = self.timeout
+         return httpx.AsyncClient(**kwargs)
+@@ -186,11 +197,13 @@ class SegmentDownloader:
+             return RangeProbe(False, total_size, etag, last_modified, content_encoding)
+ 
+         try:
+-            response = await client.get(
+-                self.url,
++            async with client.stream(
++                "GET", self.url,
+                 headers=self._headers({"Accept-Encoding": "identity", "Range": "bytes=0-0"}),
+                 follow_redirects=True,
+-            )
++            ) as response:
++                # Probe headers only: a server may ignore Range and return a huge body.
++                pass
+         except httpx.HTTPError:
+             return RangeProbe(False, total_size, etag, last_modified, content_encoding)
+ 
+@@ -548,5 +561,7 @@ def _parse_content_disposition(header: str) -> str | None:
+ 
+ def _sanitize_filename(filename: str) -> str:
+     """清理文件名中不安全的字符"""
+-    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
+-    return filename[:255] if filename else filename
++    filename = re.sub(r'[\x00-\x1f<>:"/\\|?*]', "_", filename).strip(" .")
++    if PureWindowsPath(filename).is_reserved():
++        filename = "_" + filename
++    return filename[:200].rstrip(" .") or "download"

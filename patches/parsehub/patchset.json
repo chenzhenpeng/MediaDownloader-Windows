@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "base_sha": "75a99d6fc46e15c4b994d5245ea4518404088c99",
+  "patches": [
+    {
+      "file": "0001-transfers.patch",
+      "sha256": "c2786678f915739a8a14bd0ac9efb9c3687b4fd8abcd0504a777fed4ff3fb75d",
+      "paths": [
+        "src/parsehub/utils/downloader.py",
+        "src/parsehub/types/result.py"
+      ]
+    },
+    {
+      "file": "0002-tools.patch",
+      "sha256": "77c2917d2628ed11217b7b15ebf339999b350740061eabee4c6efa61ec4c0ddd",
+      "paths": [
+        "src/parsehub/errors.py",
+        "src/parsehub/parsers/base/ytdlp.py"
+      ]
+    },
+    {
+      "file": "0003-platform-boundary.patch",
+      "sha256": "8547926a30c8aa303803e4050db78d06b64528f36d2e1d4dc19222f827cf4011",
+      "paths": [
+        "src/parsehub/__init__.py",
+        "src/parsehub/parsers/base/base.py",
+        "src/parsehub/parsers/parser/__init__.py",
+        "src/parsehub/parsers/parser/bilibili.py",
+        "src/parsehub/provider_api/bilibili.py",
+        "src/parsehub/provider_api/kuaishou.py",
+        "src/parsehub/utils/fallback.py"
+      ]
+    },
+    {
+      "file": "0004-windows-tests.patch",
+      "sha256": "aac09c8b0e6cb13ae882e65acbd9c25779b0966b09c9f6eb2020d80ad5d8c78a",
+      "paths": [
+        "test/test_bilibili_offline.py",
+        "test/test_cli.py",
+        "test/test_cli_config.py"
+      ]
+    }
+  ],
+  "excluded": {
+    "uv.lock": "Original upstream lock preserved in Git; the app owns root uv.lock"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "inno_setup_version": "6.7.4",
+  "download_url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe",
+  "download_sha256": "a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c",
+  "iscc_sha256": "f02fa0e5f237b47d7ed1edae9b991866ec94fe02af61eb6a73e94f92fe8e0604",
+  "language_source": "https://github.com/jrsoftware/issrc/blob/is-6_7_4/Files/Languages/Unofficial/ChineseSimplified.isl",
+  "language_blob_sha": "d6a11c4490de07dad443ade668289fc954dfa1ed"
+}

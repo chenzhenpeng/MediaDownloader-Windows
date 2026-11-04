@@ -1,0 +1,254 @@
+diff --git a/src/parsehub/__init__.py b/src/parsehub/__init__.py
+index e5fb847..616200b 100644
+--- a/src/parsehub/__init__.py
++++ b/src/parsehub/__init__.py
+@@ -17,8 +17,8 @@ logger.disable(__name__)
+ 
+ 
+ class ParseHub:
+-    def __init__(self) -> None:
+-        self.parsers: list[type[BaseParser]] = BaseParser.get_registry()
++    def __init__(self, *, parsers: list[type[BaseParser]] | None = None) -> None:
++        self.parsers: list[type[BaseParser]] = BaseParser.get_registry() if parsers is None else list(parsers)
+ 
+     async def parse(self, url: str, *, proxy: str | None = None, cookie: str | dict | None = None) -> AnyParseResult:
+         """解析
+diff --git a/src/parsehub/parsers/base/base.py b/src/parsehub/parsers/base/base.py
+index 92649df..f1be745 100644
+--- a/src/parsehub/parsers/base/base.py
++++ b/src/parsehub/parsers/base/base.py
+@@ -40,6 +40,7 @@ def is_content_unavailable(e: Exception) -> bool:
+ 
+ 
+ class BaseParser(ABC):
++    request_guard = None  # Optional application-owned async HTTPX request hook.
+     _registry: list[type["BaseParser"]] = []
+     _registry_initialized: bool = False
+ 
+@@ -167,13 +168,16 @@ class BaseParser(ABC):
+             url = f"https://{url}"
+ 
+         if any(x in url for x in self.__redirect_keywords__):
+-            async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as client:
++            guard = type(self).request_guard
++            hooks = {"request": [guard]} if guard else {}
++            async with httpx.AsyncClient(proxy=self.proxy, timeout=30, max_redirects=10, event_hooks=hooks) as client:
+                 try:
+                     r = await client.get(
+                         url,
+                         follow_redirects=True,
+                         headers={"User-Agent": UA} if headers is None else headers,
+                     )
++                    r.raise_for_status()
+                 except (httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                     raise ParseError("获取原始链接超时") from e
+                 except Exception as e:
+diff --git a/src/parsehub/parsers/parser/__init__.py b/src/parsehub/parsers/parser/__init__.py
+index 68315e3..261c042 100644
+--- a/src/parsehub/parsers/parser/__init__.py
++++ b/src/parsehub/parsers/parser/__init__.py
+@@ -1,20 +1,23 @@
+-# ruff: noqa: F403
+-from .bangumi import *
+-from .bilibili import *
+-from .coolapk import *
+-from .douban import *
+-from .douyin import *
+-from .facebook import *
+-from .instagram import *
+-from .medium import *
+-from .threads import *
+-from .tieba import *
+-from .toutiao import *
+-from .twitter import *
+-from .weibo import *
+-from .weixin import *
+-from .wxchannels import *
+-from .xhs import *
+-from .xiaoheihe import *
+-from .youtube import *
+-from .zuiyou import *
++"""Lazy public exports: importing one parser must not import every platform SDK."""
++from importlib import import_module
++
++_EXPORTS = {
++    "BangumiParser": "bangumi", "BiliParse": "bilibili", "BiliVideoParseResult": "bilibili",
++    "BiliMusicParseResult": "bilibili", "CoolapkParser": "coolapk", "CoolapkImageParseResult": "coolapk",
++    "CoolapkMultimediaParseResult": "coolapk", "CoolapkRichTextParseResult": "coolapk",
++    "DoubanParser": "douban", "DoubanRichTextParseResult": "douban", "DouyinParser": "douyin",
++    "FacebookParse": "facebook", "InstagramParser": "instagram", "MediumParser": "medium",
++    "ThreadsParser": "threads", "TieBaParser": "tieba", "ToutiaoParser": "toutiao",
++    "TwitterParser": "twitter", "WeiboParser": "weibo", "WXParser": "weixin",
++    "WXChannelsParser": "wxchannels", "XHSParser": "xhs", "XiaoHeiHeParser": "xiaoheihe",
++    "YtbParse": "youtube", "ZuiYouParser": "zuiyou",
++}
++__all__ = list(_EXPORTS)
++
++
++def __getattr__(name):
++    if name not in _EXPORTS:
++        raise AttributeError(name)
++    value = getattr(import_module(f"{__name__}.{_EXPORTS[name]}"), name)
++    globals()[name] = value
++    return value
+diff --git a/src/parsehub/parsers/parser/bilibili.py b/src/parsehub/parsers/parser/bilibili.py
+index d460d5c..29e1dd5 100644
+--- a/src/parsehub/parsers/parser/bilibili.py
++++ b/src/parsehub/parsers/parser/bilibili.py
+@@ -109,7 +109,7 @@ class BiliParse(BaseParser):
+             return cast(BiliDynamic, dynamic_info)
+ 
+     async def bili_api_parse(self, url: str) -> BiliVideoParseResult | ImageParseResult:
+-        async with BiliAPI(proxy=self.proxy) as bili:
++        async with BiliAPI(proxy=self.proxy, cookie=self.cookie.get_value()) as bili:
+             video_info = await bili.get_video_info(url)
+ 
+             if not (data := video_info.get("data")):
+@@ -200,6 +200,14 @@ class BiliParse(BaseParser):
+ 
+ 
+ class BiliYtParse(YtParser, register=False):
++    def get_cookie_text(self) -> str | None:
++        cookie = self.cookie.get_value()
++        if not cookie:
++            return None
++        return "# Netscape HTTP Cookie File\n" + "".join(
++            f".bilibili.com\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n" for name, value in cookie.items()
++        )
++
+     @property
+     def _video_parse_result_type(self) -> type[BiliYtVideoParseResult]:
+         return BiliYtVideoParseResult
+diff --git a/src/parsehub/provider_api/bilibili.py b/src/parsehub/provider_api/bilibili.py
+index ea5884d..ad332b6 100644
+--- a/src/parsehub/provider_api/bilibili.py
++++ b/src/parsehub/provider_api/bilibili.py
+@@ -31,9 +31,10 @@ CODE_LEN = len(ENCODE_MAP)
+ 
+ 
+ class BiliAPI:
+-    def __init__(self, proxy: str | None = None):
++    def __init__(self, proxy: str | None = None, cookie: dict | None = None):
+         self.headers = {"User-Agent": USER_AGENT}
+         self.proxy = proxy
++        self.cookie = dict(cookie or {})
+         self._client: httpx.AsyncClient | None = None
+ 
+     async def __aenter__(self):
+@@ -60,11 +61,12 @@ class BiliAPI:
+         # buvid3 失效会触发 -352 风控，每次现取一枚匿名指纹，覆盖配置里的旧值
+         b3, b4 = await self.get_buvid()
+         cookie = {**(cookie or {}), "buvid3": b3, "buvid4": b4}
+-        response = await self._get_client().get(
++        client = self._get_client()
++        client.cookies.update(cookie)
++        response = await client.get(
+             "https://api.bilibili.com/x/polymer/web-dynamic/v1/detail",
+             headers=headers,
+             params=params,
+-            cookies=cookie,
+         )
+         response.raise_for_status()
+         mj = response.json()
+@@ -118,10 +120,13 @@ class BiliAPI:
+             "ac_time_value": "",
+             "opus-goback": "1",
+         }
+-        response = await self._get_client().get(
++        cookies.update(self.cookie)
++        cookies.update({"buvid3": b3, "buvid4": b4})
++        client = self._get_client()
++        client.cookies.update(cookies)
++        response = await client.get(
+             "https://api.bilibili.com/x/player/playurl",
+             params=params,
+-            cookies=cookies,
+         )
+         return cast(dict[str, Any], response.json())
+ 
+@@ -178,7 +183,8 @@ class BiliAPI:
+ 
+     def _get_client(self) -> httpx.AsyncClient:
+         if self._client is None or getattr(self._client, "is_closed", False):
+-            self._client = httpx.AsyncClient(proxy=self.proxy, headers=self.headers)
++            self._client = httpx.AsyncClient(proxy=self.proxy, headers=self.headers, cookies=self.cookie,
++                                             timeout=httpx.Timeout(30, connect=10, pool=10))
+         return self._client
+ 
+     async def aclose(self):
+diff --git a/src/parsehub/provider_api/kuaishou.py b/src/parsehub/provider_api/kuaishou.py
+index aed0a42..4c5a37c 100644
+--- a/src/parsehub/provider_api/kuaishou.py
++++ b/src/parsehub/provider_api/kuaishou.py
+@@ -11,6 +11,25 @@ from .. import ParseError
+ from ..utils.helpers import UA
+ 
+ 
++def direct_video_url(*candidates):
++    """Prefer a whole-file URL to an HLS/DASH playlist; never use one HLS segment."""
++    urls = []
++    for value in candidates:
++        if isinstance(value, str):
++            urls.append(value)
++        elif isinstance(value, list):
++            urls.extend(item.get("url") if isinstance(item, dict) else item for item in value)
++        elif isinstance(value, dict):
++            urls.append(value.get("url"))
++    for url in urls:
++        if not isinstance(url, str) or not url.startswith(("https://", "http://")):
++            continue
++        if not urlparse(url).path.lower().endswith((".m3u8", ".mpd", ".ts", ".m4s")):
++            return url
++    return next((url for url in urls if isinstance(url, str) and url.startswith(("https://", "http://"))
++                 and not urlparse(url).path.lower().endswith((".ts", ".m4s"))), None)
++
++
+ class KuaiShouAPI:
+     def __init__(
+         self,
+@@ -171,7 +190,7 @@ class KuaiShouVideo:
+         representation = (adaptation_set.get("representation") or [{}])[0]
+ 
+         return {
+-            "url": representation.get("url"),
++            "url": direct_video_url(representation.get("url"), photo.get("photoUrl"), representation.get("backupUrl")),
+             "width": representation.get("width"),
+             "height": representation.get("height"),
+             "duration": adaptation_set.get("duration"),
+@@ -510,6 +529,9 @@ class KuaishouParser:
+                 video_url = vvsr.get("url")
+                 w, h = vvsr.get("width", 0), vvsr.get("height", 0)
+                 d = self.client.get("VisionVideoAdaptationSet:1", {}).get("duration", 0)
++                photo_key = f"VisionVideoDetailPhoto:{self.video_id}"
++                vvdp = self.client.get(photo_key, {})
++                video_url = direct_video_url(video_url, vvdp.get("photoUrl"), vvsr.get("backupUrl"))
+                 # 兜底：直接从 Photo 对象获取
+                 if not video_url:
+                     photo_key = f"VisionVideoDetailPhoto:{self.video_id}"
+@@ -532,12 +554,7 @@ class KuaishouParser:
+                     if backup_urls:
+                         w, h = representation.get("width", 0), representation.get("height", 0)
+                         return KuaishouVideo(self._first_url(backup_urls), w=w, h=h, d=d)
+-                    m3u8_slice = representation.get("m3u8Slice")
+-                    if m3u8_slice and "http" in m3u8_slice:
+-                        for line in m3u8_slice.splitlines():
+-                            line = line.strip()
+-                            if line.startswith("http://") or line.startswith("https://"):
+-                                return KuaishouVideo(line)
++                    # A single URL from m3u8Slice is only one segment, not the whole video.
+         except Exception as e:
+             logger.warning(f"Failed to parse video URL: {e}")
+             return None
+diff --git a/src/parsehub/utils/fallback.py b/src/parsehub/utils/fallback.py
+index 5ef274e..1dca094 100644
+--- a/src/parsehub/utils/fallback.py
++++ b/src/parsehub/utils/fallback.py
+@@ -38,6 +38,8 @@ async def run_fallback(  # noqa: UP047
+         except Exception as e:
+             logger.opt(exception=e).debug(f"{label} {stage.name} 失败")
+             err = wrap(e, stage)
++            if err is not e:
++                err.__cause__ = e
+             if stop(e):
+                 if err is e:
+                     raise
