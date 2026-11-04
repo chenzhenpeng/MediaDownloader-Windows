@@ -4,7 +4,7 @@
   "patches": [
     {
       "file": "0001-transfers.patch",
-      "sha256": "8db58cfaf18781960cbd762769b5b7c19a4b1502a4635e3757668d5b9b931136",
+      "sha256": "fbc7ab8120e485dbf7168fde390902698b25c188b5e4ee431466873279ca2ea1",
       "paths": [
         "src/parsehub/utils/downloader.py",
         "src/parsehub/types/result.py"
@@ -20,7 +20,7 @@
     },
     {
       "file": "0003-platform-boundary.patch",
-      "sha256": "d369e2300f3abe95cf298899a0d54b7caffa985c042b0c35cbc9f3c04d82348e",
+      "sha256": "ca17d7148791987fec57748dcac8aad74e1d12a01a518cd8d4e9bfebbf893001",
       "paths": [
         "src/parsehub/__init__.py",
         "src/parsehub/parsers/base/base.py",

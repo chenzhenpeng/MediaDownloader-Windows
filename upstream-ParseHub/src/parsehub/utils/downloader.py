@@ -229,10 +229,13 @@ class SegmentDownloader:
 
     async def _download_single(self, client: httpx.AsyncClient, total_size: int | None) -> None:
         complete_path = self._require_complete_path()
+        request_headers = {"Accept-Encoding": "identity"}
+        if self.headers.get("Range") == "bytes=0-" and total_size is not None and total_size > 0:
+            request_headers["Range"] = f"bytes=0-{total_size - 1}"
         async with client.stream(
             "GET",
             self.url,
-            headers=self._headers({"Accept-Encoding": "identity"}),
+            headers=self._headers(request_headers),
             follow_redirects=True,
         ) as response:
             response.raise_for_status()

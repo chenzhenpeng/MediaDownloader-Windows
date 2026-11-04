@@ -31,7 +31,9 @@ class WXChannelsVideoParseResult(VideoParseResult):
     async def _do_download(self, *, headers=None, **kwargs):
         # Finder CDN can reject an ordinary GET even when HEAD and Range succeed.
         # Request the complete representation explicitly, including small videos.
-        return await super()._do_download(headers={**(headers or {}), "Range": "bytes=0-"}, **kwargs)
+        return await super()._do_download(
+            headers={**(headers or {}), "Range": "bytes=0-", "Connection": "close"}, **kwargs
+        )
 
 
 __all__ = ["WXChannelsParser", "WXChannelsVideoParseResult"]

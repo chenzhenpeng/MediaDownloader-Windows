@@ -14,13 +14,18 @@ from parsehub.utils.media_info import MediaInfoReader
 def test_small_channels_video_requests_complete_range_without_cookie(tmp_path, monkeypatch):
     payload = b"small-video-response"
     seen = []
+    poisoned_connection = False
 
     def handle(request):
+        nonlocal poisoned_connection
         assert "cookie" not in request.headers
         if request.method == "HEAD":
+            poisoned_connection = request.headers.get("connection") != "close"
             return httpx.Response(200, headers={"Content-Length": str(len(payload))})
+        if poisoned_connection:
+            raise httpx.RemoteProtocolError("CDN HEAD leaves unexpected bytes on a reused connection")
         seen.append(request.headers.get("range"))
-        if request.headers.get("range") != "bytes=0-":
+        if request.headers.get("range") != f"bytes=0-{len(payload) - 1}":
             raise httpx.RemoteProtocolError("CDN rejects plain GET")
         return httpx.Response(
             206,
@@ -37,7 +42,7 @@ def test_small_channels_video_requests_complete_range_without_cookie(tmp_path, m
     result = WXChannelsVideoParseResult(title="test", video=VideoRef(url="https://finder.video.qq.com/test"))
     downloaded = asyncio.run(result.download(tmp_path))
     assert Path(downloaded.media.path).read_bytes() == payload
-    assert seen == ["bytes=0-"]
+    assert seen == [f"bytes=0-{len(payload) - 1}"]
 
 
 @pytest.mark.parametrize("content_range", ["bytes 0-1/4", "bytes 1-3/4", "bytes 0-3/5"])

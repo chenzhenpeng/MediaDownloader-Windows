@@ -120,10 +120,10 @@ index d460d5c..29e1dd5 100644
      def _video_parse_result_type(self) -> type[BiliYtVideoParseResult]:
          return BiliYtVideoParseResult
 diff --git a/src/parsehub/parsers/parser/wxchannels.py b/src/parsehub/parsers/parser/wxchannels.py
-index b123565..b4977c6 100644
+index b123565..bc3d43f 100644
 --- a/src/parsehub/parsers/parser/wxchannels.py
 +++ b/src/parsehub/parsers/parser/wxchannels.py
-@@ -24,7 +24,14 @@ class WXChannelsParser(BaseParser):
+@@ -24,7 +24,16 @@ class WXChannelsParser(BaseParser):
          except WXChannelsError as e:
              raise ParseError(f"微信视频号解析失败: {e}") from e
  
@@ -136,7 +136,9 @@ index b123565..b4977c6 100644
 +    async def _do_download(self, *, headers=None, **kwargs):
 +        # Finder CDN can reject an ordinary GET even when HEAD and Range succeed.
 +        # Request the complete representation explicitly, including small videos.
-+        return await super()._do_download(headers={**(headers or {}), "Range": "bytes=0-"}, **kwargs)
++        return await super()._do_download(
++            headers={**(headers or {}), "Range": "bytes=0-", "Connection": "close"}, **kwargs
++        )
 +
 +
 +__all__ = ["WXChannelsParser", "WXChannelsVideoParseResult"]
