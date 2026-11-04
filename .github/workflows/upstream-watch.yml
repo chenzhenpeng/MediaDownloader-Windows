@@ -39,7 +39,8 @@ jobs:
           git switch -c $branchName
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add upstream-ParseHub src/media_downloader/__init__.py review/upstream-candidate.json
+          git add upstream-ParseHub src/media_downloader/__init__.py
+          git add -f review/upstream-candidate.json
           git commit -m "Prepare reviewed patch replay for ParseHub candidate"
           git push origin $branchName
           $body = "Candidate SHA: $($report.candidate_sha)`n`nPinned patches applied. Refresh uv.lock if metadata changed. Run Windows contracts, frozen build and live platform samples before merging or signing. Dependency change: $($report.dependencies_changed). No automatic release."

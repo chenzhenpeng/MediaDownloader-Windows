@@ -1,3 +1,13 @@
+## 当前 x64 MSI（预览版 4）
+
+`MediaDownloader-0.2.0-preview.4-win-x64.msi` 使用 WiX 6.0.2 构建，MSI Template 为 `x64;2052`，2534 个组件均为 64 位组件。应用、后端和内核也是 x64。
+
+已在隔离 QA 产品上验证安装后启动、Cookie 掩码回显、修复保留数据、卸载保留用户文件和数据库。未卸载用户原有应用。当前包未进行产品代码签名，干净机验收仍待完成。
+
+从此前 EXE 安装版迁移须先手动卸载旧应用，再安装 MSI；用户数据及下载作品保留。后续 MSI 使用固定 UpgradeCode 升级。
+
+以下为此前 EXE 安装方案的历史记录。
+
 # Windows 安装版
 
 当前产物：`dist/release/MediaDownloader-0.2.0-preview.3-win-x64-Setup.exe`。
