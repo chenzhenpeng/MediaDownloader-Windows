@@ -62,7 +62,7 @@ jobs:
         with:
           name: reviewed-unsigned-engine
           path: build/unsigned-engine
-      - name: Sign only after the protected environment is approved
+      - name: Sign in the main-branch-only environment
         env:
           ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
           ENGINE_KEY_ID: ${{ vars.ENGINE_KEY_ID }}

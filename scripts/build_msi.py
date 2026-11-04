@@ -12,8 +12,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "0.2.0-preview.4"
-MSI_VERSION = "0.2.4"  # Third field is the monotonically increasing release sequence.
+RELEASE = "0.2.0-preview.5"
+MSI_VERSION = "0.2.5"  # Third field is the monotonically increasing release sequence.
 UPGRADE = uuid.UUID("8f5574cb-a715-4ba1-ad07-4212a70d460b")
 NS = "http://wixtoolset.org/schemas/v4/wxs"
 UI = "http://wixtoolset.org/schemas/v4/wxs/ui"

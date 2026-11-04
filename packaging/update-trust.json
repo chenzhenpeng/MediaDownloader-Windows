@@ -1,8 +1,13 @@
 {
   "schema_version": 1,
   "channel": "stable",
-  "keys": {},
-  "allowed_hosts": [],
-  "manifest_url": null,
-  "signature_url": null
+  "keys": {
+    "release-1": "p1d2fo0j7EkCi5JP1t8F80f8drhSqLjk5XRAGjuVJA8="
+  },
+  "allowed_hosts": [
+    "github.com",
+    "release-assets.githubusercontent.com"
+  ],
+  "manifest_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/latest/download/release.json",
+  "signature_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/latest/download/release.sig"
 }
