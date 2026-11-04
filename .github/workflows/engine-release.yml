@@ -10,6 +10,8 @@ on:
         description: Strictly increasing stable manifest sequence
         type: number
         required: true
+env:
+  PYTHONUTF8: '1'
 permissions:
   contents: read
 concurrency:
