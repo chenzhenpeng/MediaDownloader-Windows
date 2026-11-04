@@ -7,6 +7,7 @@ import os
 import sqlite3
 import subprocess
 import time
+import winreg
 from pathlib import Path
 
 from msi_inspect import inspect
@@ -23,6 +24,15 @@ def main():
     installer = Path(os.environ["SystemRoot"]) / "System32/msiexec.exe"
     executable = destination / "versions/0.2.0-preview.5/MediaDownloader.exe"
     report = {"qa_directory": str(qa), "architecture": metadata}
+    default_executable = (
+        Path(os.environ["LOCALAPPDATA"])
+        / "Programs/MediaDownloaderMSIQA/versions/0.2.0-preview.5/MediaDownloader.exe"
+    )
+    default_existed = default_executable.exists()
+
+    def remembered_root():
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\MediaDownloaderMSIQA\Installer") as key:
+            return Path(winreg.QueryValueEx(key, "InstallRoot")[0]).resolve()
 
     def run_msi(mode, target, log):
         # msiexec parses PROPERTY="value" itself rather than using the CRT's
@@ -70,6 +80,8 @@ def main():
         assert executable.is_file()
         first = smoke("installed-settings")
         assert sum(p["available"] for p in first["backend"]["platforms"]) == 24
+        assert first["backend"]["update"]["configured"]
+        assert remembered_root() == destination.resolve()
         report["installed_native_launch_and_cookie_reload"] = True
         sentinel = destination / "user-file-keep.txt"
         sentinel.write_text("preserve", encoding="utf-8")
@@ -78,6 +90,10 @@ def main():
             db.execute("INSERT OR REPLACE INTO settings VALUES ('msi_qa_marker', '\"keep\"')")
         run_msi("/fa", package, "repair.log")
         smoke("repaired-settings")
+        assert remembered_root() == destination.resolve()
+        if not default_existed:
+            assert not default_executable.exists()
+        report["repair_preserves_install_location"] = True
         assert sentinel.read_text(encoding="utf-8") == "preserve"
         report["repair_preserves_user_data"] = True
     finally:

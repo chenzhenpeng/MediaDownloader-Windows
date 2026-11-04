@@ -89,6 +89,17 @@ def main():
             ),
         )
     element(package, "Property", Id="MSIRESTARTMANAGERCONTROL", Value="DisableShutdown")
+    remembered = element(package, "Property", Id="INSTALLFOLDER", Secure="yes")
+    element(
+        remembered,
+        "RegistrySearch",
+        Id="FindInstalledRoot",
+        Root="HKCU",
+        Bitness="always64",
+        Key=app_key + r"\Installer",
+        Name="InstallRoot",
+        Type="raw",
+    )
     element(package, "Icon", Id="ProductIcon", SourceFile=str(payload / "Assets/AppIcon.ico"))
     element(package, "Property", Id="ARPPRODUCTICON", Value="ProductIcon")
     local = element(package, "StandardDirectory", Id="LocalAppDataFolder")
@@ -103,6 +114,24 @@ def main():
     version = element(versions, "Directory", Id="Payload", Name=RELEASE)
     element(package, "StandardDirectory", Id="ProgramMenuFolder")
     feature = element(package, "Feature", Id="Complete", Title="Media Downloader", Level="1")
+    root_component = element(
+        install,
+        "Component",
+        Id="RememberInstallRoot",
+        Guid=str(uuid.uuid5(upgrade, "install-root")),
+        Bitness="always64",
+    )
+    element(
+        root_component,
+        "RegistryValue",
+        Root="HKCU",
+        Key=app_key + r"\Installer",
+        Name="InstallRoot",
+        Type="string",
+        Value="[INSTALLFOLDER]",
+        KeyPath="yes",
+    )
+    element(feature, "ComponentRef", Id="RememberInstallRoot")
     directories = {".": version}
     files = sorted(path for path in payload.rglob("*") if path.is_file())
     if any(path.suffix in {".sqlite3", ".db", ".lock"} for path in files):
