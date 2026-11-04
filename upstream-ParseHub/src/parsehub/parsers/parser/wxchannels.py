@@ -24,8 +24,15 @@ class WXChannelsParser(BaseParser):
         except WXChannelsError as e:
             raise ParseError(f"微信视频号解析失败: {e}") from e
 
-        return VideoParseResult(title=video.title, video=VideoRef(url=video.video_url, thumb_url=video.thumb_url))
+        return WXChannelsVideoParseResult(title=video.title, video=VideoRef(url=video.video_url, thumb_url=video.thumb_url))
 
 
-__all__ = ["WXChannelsParser"]
+class WXChannelsVideoParseResult(VideoParseResult):
+    async def _do_download(self, *, headers=None, **kwargs):
+        # Finder CDN can reject an ordinary GET even when HEAD and Range succeed.
+        # Request the complete representation explicitly, including small videos.
+        return await super()._do_download(headers={**(headers or {}), "Range": "bytes=0-"}, **kwargs)
+
+
+__all__ = ["WXChannelsParser", "WXChannelsVideoParseResult"]
 

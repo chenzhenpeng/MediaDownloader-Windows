@@ -217,7 +217,8 @@ def main():
         "target": "windows-x86_64",
         "engine_version": args.engine_version,
         "upstream_sha": UPSTREAM_SHA,
-        "patchset": "dev" + __version__.rsplit("dev", 1)[-1],
+        "patchset": "sha256-"
+        + hashlib.sha256((ROOT / "patches/parsehub/patchset.json").read_bytes()).hexdigest()[:12],
         "app_version": __version__,
         "python": sys.version.split()[0],
         "yt-dlp": importlib.metadata.version("yt-dlp"),

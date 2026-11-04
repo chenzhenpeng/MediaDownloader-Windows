@@ -239,6 +239,19 @@ class SegmentDownloader:
             content_encoding = response.headers.get("Content-Encoding")
             response_total = _parse_int(response.headers.get("Content-Length"))
             expected_size = response_total if not _has_non_identity_encoding(content_encoding) else None
+            if response.status_code == 206:
+                received_range = _parse_content_range(response.headers.get("Content-Range", ""))
+                if (
+                    not received_range
+                    or received_range[0] != 0
+                    or received_range[2] is None
+                    or received_range[1] + 1 != received_range[2]
+                    or total_size is not None and received_range[2] != total_size
+                    or response_total is not None and response_total != received_range[2]
+                    or _has_non_identity_encoding(content_encoding)
+                ):
+                    raise DownloadError("单连接下载返回了不完整或不匹配的媒体范围")
+                expected_size = received_range[2]
             total = expected_size or total_size or 0
             current = 0
 

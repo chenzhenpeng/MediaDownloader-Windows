@@ -4,7 +4,7 @@
   "patches": [
     {
       "file": "0001-transfers.patch",
-      "sha256": "c2786678f915739a8a14bd0ac9efb9c3687b4fd8abcd0504a777fed4ff3fb75d",
+      "sha256": "8db58cfaf18781960cbd762769b5b7c19a4b1502a4635e3757668d5b9b931136",
       "paths": [
         "src/parsehub/utils/downloader.py",
         "src/parsehub/types/result.py"
@@ -20,12 +20,13 @@
     },
     {
       "file": "0003-platform-boundary.patch",
-      "sha256": "8547926a30c8aa303803e4050db78d06b64528f36d2e1d4dc19222f827cf4011",
+      "sha256": "d369e2300f3abe95cf298899a0d54b7caffa985c042b0c35cbc9f3c04d82348e",
       "paths": [
         "src/parsehub/__init__.py",
         "src/parsehub/parsers/base/base.py",
         "src/parsehub/parsers/parser/__init__.py",
         "src/parsehub/parsers/parser/bilibili.py",
+        "src/parsehub/parsers/parser/wxchannels.py",
         "src/parsehub/provider_api/bilibili.py",
         "src/parsehub/provider_api/kuaishou.py",
         "src/parsehub/utils/fallback.py"

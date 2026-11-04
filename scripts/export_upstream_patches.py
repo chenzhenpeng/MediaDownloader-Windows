@@ -19,6 +19,7 @@ GROUPS = {
         "src/parsehub/parsers/base/base.py",
         "src/parsehub/parsers/parser/__init__.py",
         "src/parsehub/parsers/parser/bilibili.py",
+        "src/parsehub/parsers/parser/wxchannels.py",
         "src/parsehub/provider_api/bilibili.py",
         "src/parsehub/provider_api/kuaishou.py",
         "src/parsehub/utils/fallback.py",

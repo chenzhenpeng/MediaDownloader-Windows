@@ -58,7 +58,7 @@ index a3de987..a4ddaf3 100644
      def download_sync(
          self,
 diff --git a/src/parsehub/utils/downloader.py b/src/parsehub/utils/downloader.py
-index c962bc9..b33e919 100644
+index c962bc9..a0ae83d 100644
 --- a/src/parsehub/utils/downloader.py
 +++ b/src/parsehub/utils/downloader.py
 @@ -1,4 +1,5 @@
@@ -134,7 +134,27 @@ index c962bc9..b33e919 100644
          except httpx.HTTPError:
              return RangeProbe(False, total_size, etag, last_modified, content_encoding)
  
-@@ -548,5 +561,7 @@ def _parse_content_disposition(header: str) -> str | None:
+@@ -226,6 +239,19 @@ class SegmentDownloader:
+             content_encoding = response.headers.get("Content-Encoding")
+             response_total = _parse_int(response.headers.get("Content-Length"))
+             expected_size = response_total if not _has_non_identity_encoding(content_encoding) else None
++            if response.status_code == 206:
++                received_range = _parse_content_range(response.headers.get("Content-Range", ""))
++                if (
++                    not received_range
++                    or received_range[0] != 0
++                    or received_range[2] is None
++                    or received_range[1] + 1 != received_range[2]
++                    or total_size is not None and received_range[2] != total_size
++                    or response_total is not None and response_total != received_range[2]
++                    or _has_non_identity_encoding(content_encoding)
++                ):
++                    raise DownloadError("单连接下载返回了不完整或不匹配的媒体范围")
++                expected_size = received_range[2]
+             total = expected_size or total_size or 0
+             current = 0
+ 
+@@ -548,5 +574,7 @@ def _parse_content_disposition(header: str) -> str | None:
  
  def _sanitize_filename(filename: str) -> str:
      """清理文件名中不安全的字符"""
