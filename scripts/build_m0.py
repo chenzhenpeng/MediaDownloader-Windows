@@ -51,6 +51,7 @@ def build(name, entry, extra):
 
 
 def baseline_report():
+    (ROOT / "review").mkdir(parents=True, exist_ok=True)
     repository = ROOT / ".cache" / "upstream-baseline"
     if not repository.exists():
         subprocess.run(
