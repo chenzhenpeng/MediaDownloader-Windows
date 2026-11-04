@@ -11,6 +11,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from PySide6.QtCore import QCoreApplication
 from scripts.release_engine import package_release
+from scripts.renew_engine_feed import renew
 from scripts.sync_upstream import apply_reviewed_patch
 from test_worker_integration import wait_for
 
@@ -66,6 +67,28 @@ def signed_change(key, raw, **fields):
     data.update(fields)
     changed = json.dumps(data).encode()
     return changed, key.sign(changed)
+
+
+def test_renew_feed_retains_immutable_engine_and_advances_sequence(signed_release):
+    key, _, original, trust, raw, signature, _, _ = signed_release
+    future = datetime.now(UTC) + timedelta(days=35)
+    renewed, signed = renew(raw, signature, trust, key, now=future)
+    manifest = verify_manifest(renewed, signed, trust, now=future)
+    assert manifest["sequence"] == original["sequence"] + 1
+    assert datetime.fromisoformat(manifest["expires_at"]) == future + timedelta(days=30)
+    changed = {"sequence", "published_at", "expires_at"}
+    assert {k: v for k, v in manifest.items() if k not in changed} == {
+        k: v for k, v in original.items() if k not in changed
+    }
+
+
+def test_renew_feed_rejects_tampering_and_wrong_signing_key(signed_release):
+    key, _, _, trust, raw, signature, _, _ = signed_release
+    with pytest.raises(UpdateError) as rejected:
+        renew(raw + b" ", signature, trust, key)
+    assert rejected.value.code == "UPDATE_SIGNATURE"
+    with pytest.raises(ValueError, match="Signing key"):
+        renew(raw, signature, trust, Ed25519PrivateKey.generate())
 
 
 def test_signature_verified_before_json_and_unsigned_never_probed(signed_release):

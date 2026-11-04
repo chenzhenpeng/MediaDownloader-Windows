@@ -2,7 +2,7 @@
 
 Windows x64 media downloader based on [ParseHub](https://github.com/z-mio/ParseHub), with a native WinUI 3 frontend and an isolated Python engine.
 
-Current client: **0.2.0 preview 4**. Navigation combines downloads and history into one management page. Supports Windows themes, per-platform encrypted Cookie storage and masked readback, and per-post download folders.
+Current client: **0.2.0 preview 5**. Navigation combines downloads and history into one management page. Supports Windows themes, per-platform encrypted Cookie storage and masked readback, and per-post download folders.
 
 ## Development
 
@@ -21,7 +21,7 @@ The x64 MSI uses WiX 6.0.2 with its UI extension. See `scripts/build_msi.py`. Pr
 
 Scheduled Actions detect upstream changes, replay reviewed patches and prepare a draft PR. Validation and review precede merging. A separate manual workflow builds and signs compatible engine packages and creates a draft release.
 
-**Production signing secrets, tool bundle variables and client trust configuration are not yet provisioned. Online engine installation is not enabled merely by creating this repository.** See [release setup](docs/release-setup.md).
+The production GitHub engine feed uses Ed25519 signatures and a pinned client public key. Install preview 5 or later to use it. The release workflow creates a draft for validation before publication; a weekly workflow renews signed discovery metadata without replacing the archive. See [release setup](docs/release-setup.md).
 
 The current engine exposes 24 platform entries; online success and media types vary by platform. See [platform coverage](docs/platforms-integration.md).
 
