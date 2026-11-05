@@ -7,6 +7,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from build_installer import RELEASE
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -15,6 +17,8 @@ def main():
     lock = json.loads((ROOT / "packaging/media-tools-lock.json").read_bytes())
     groups = defaultdict(int)
     files = [p for p in payload.rglob("*") if p.is_file()]
+    engine = json.loads((payload / "engine/engine.json").read_bytes())
+    official = engine.get("layout") == "official-embedded"
     for path in files:
         relative = path.relative_to(payload)
         group = relative.parts[0] if len(relative.parts) > 1 else "client"
@@ -26,17 +30,23 @@ def main():
             "qt6gui.dll",
             "qt6widgets.dll",
         }, f"Unused dependency returned: {relative}"
-        assert not any(part.casefold() in {"numpy", "cv2"} for part in relative.parts), relative
+        if any(part.casefold() in {"numpy", "cv2"} for part in relative.parts):
+            assert official and relative.parts[0] == "engine", relative
     tools = payload / "engine/tools"
     assert not (tools / "_internal").exists(), "Duplicated yt-dlp runtime returned"
     assert not list(tools.glob("*.dll")), "Old shared FFmpeg DLLs survived the clean build"
-    for name, expected in {
+    expected_tools = {
         "ffmpeg.exe": lock["ffmpeg"]["ffmpeg_sha256"],
         "ffprobe.exe": lock["ffmpeg"]["ffprobe_sha256"],
-        "yt-dlp.exe": lock["yt-dlp"]["sha256"],
-    }.items():
+    }
+    if official:
+        assert not (tools / "yt-dlp.exe").exists(), "Duplicate yt-dlp executable returned"
+        assert (payload / "engine/Lib/site-packages/yt_dlp/__init__.py").is_file()
+    else:
+        expected_tools["yt-dlp.exe"] = lock["yt-dlp"]["sha256"]
+    for name, expected in expected_tools.items():
         assert hashlib.file_digest((tools / name).open("rb"), "sha256").hexdigest() == expected
-    installer = ROOT / "dist/release/MediaDownloader-0.2.0-preview.13-win-x64.msi"
+    installer = ROOT / f"dist/release/MediaDownloader-{RELEASE}-win-x64-Setup.exe"
     previous = ROOT / "dist/release/MediaDownloader-0.2.0-preview.6-win-x64.msi"
     report = {
         "passed": True,
@@ -54,7 +64,7 @@ def main():
     compact_report = ROOT / "dist/release/release.json"
     if compact_report.exists():
         compact = json.loads(compact_report.read_bytes())
-        if compact.get("release") == "0.2.0-preview.13":
+        if compact.get("release") == RELEASE:
             setup = ROOT / "dist/release" / compact["installer"]
             assert setup.stat().st_size == compact["bytes"]
             assert hashlib.file_digest(setup.open("rb"), "sha256").hexdigest() == compact["sha256"]
@@ -74,7 +84,7 @@ def main():
                 compact_sha256=compact["sha256"],
                 same_payload_as_accepted_qa=True,
             )
-    target = ROOT / "review/native/package-audit-preview13.json"
+    target = ROOT / f"review/native/package-audit-{RELEASE}.json"
     assert report["installer_bytes"] or report.get("compact_installer_bytes"), (
         "No completed installer to audit"
     )

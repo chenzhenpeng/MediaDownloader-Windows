@@ -19,7 +19,7 @@ from build_installer import machine
 
 ROOT = Path(__file__).resolve().parents[1]
 KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{B3EE607A-217F-4CBA-9037-A5C55D366932}_is1"
-VERSION = "0.2.0-preview.13"
+VERSION = "0.2.0-preview.14"
 
 
 def installed():
@@ -101,7 +101,7 @@ def main():
             assert sha(payload / item["path"]) == item["sha256"], item["path"]
         report["installed_inventory_files"] = len(inventory)
         first = smoke("first-launch")
-        assert first["backend"]["client_version"] == "0.2.0.dev13"
+        assert first["backend"]["client_version"] == "0.2.0.dev14"
         report["installed_native_launch"] = True
         sentinel = destination / "user-created-keep.txt"
         sentinel.write_text("User-owned file: preserve during repair and uninstall", encoding="utf-8")

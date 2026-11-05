@@ -6,7 +6,7 @@ The application package, ParseHub parser component, and execution runtime have s
 
 ## Windows application
 
-The main installer is a native x64 EXE with current-user installation. Close the application before upgrading. Preview 13 starts a new data baseline under LocalAppData/MediaDownloader/v4. Older settings, credentials and task history are not migrated; existing files are left untouched. Preview installers do not yet have a product code-signing certificate. The optional MSI is a separate legacy/deployment path.
+The main installer is a native x64 EXE with current-user installation. Close the application before upgrading. Preview 14 uses a fresh official-package baseline under LocalAppData/MediaDownloader/v5. Older settings, credentials and task history are not imported; existing files are left untouched. Preview installers do not yet have a product code-signing certificate.
 
 The interface supports Windows themes, encrypted per-platform Cookie storage with masked readback, per-post folders, and one download management page. The platform catalog describes parser capabilities; availability and accepted media types vary by platform.
 
@@ -20,13 +20,13 @@ uv run pytest tests upstream-ParseHub/test -q --tb=short
 uv run ruff check src tests scripts packaging
 ```
 
-Application, parser and execution-runtime build workflows are under `.github/workflows`. The application workflow consumes an authenticated runtime rather than rebuilding ParseHub for each UI release. Media tools and the portable installer compiler use reviewed SHA-256 locks.
+Application and execution-runtime build workflows are under `.github/workflows`. The application workflow consumes an authenticated runtime; independent parser updates download upstream wheels directly. Media tools and the portable installer compiler use reviewed SHA-256 locks.
 
 ## Updates
 
-New clients use the signed fixed `channel-stable` component catalog rather than repository Latest. Normal updates require a newer compatible component. Parser updates reuse an authenticated matching runtime; pointer changes represent complete version combinations and preserve a known-good rollback. The component catalog is the only discovery path. Repository Latest points to the current client installer; older client compatibility is not maintained.
+ParseHub updates download the original stable wheel directly from official PyPI, checking its hash, archive, Python/dependency requirements and worker compatibility before an idle switch. The upstream version is preserved; parser source is not patched or republished. Runtime dependencies remain separate signed GitHub releases through `channel-stable`. Repository Latest points to the current client installer; older client compatibility is not maintained.
 
-Upstream polling prepares candidate PRs and replays reviewed patches. It does not automatically execute or publish arbitrary upstream changes. Release workflows create drafts for acceptance. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
+Daily client checks and read-only upstream monitoring inspect PyPI. Parser updates reuse a matching execution environment, and dependency changes request a separate runtime update. GitHub Actions can build and sign execution environments without a local build. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
 
 ## Documentation and licensing
 
@@ -34,8 +34,8 @@ Upstream polling prepares candidate PRs and replays reviewed patches. It does no
 
 Vendored ParseHub retains its [MIT license](upstream-ParseHub/LICENSE). Bundled third-party components retain their respective licenses. Older Qt notes are preserved in [legacy notes](docs/legacy-qt-readme.md).
 
-## Original-package migration
+## Official package baseline
 
-Preview 13 keeps the accepted production engine. The direct official ParseHub package path has passed isolated task-service validation but is still explicitly experimental; see [migration status](docs/official-package-status.md). Updating the source repository does not enable this path in installed clients.
+Preview 14 enables the original ParseHub 2.4.0 wheel on a pinned Python 3.13.17 environment. Independent wheel installation, compatibility probing, worker switching and rollback are covered by automated and isolated acceptance checks. Read [official package behavior and validation limits](docs/official-package-status.md).
 
-Preview 13 starts a fresh current-client data baseline; see [baseline and install notes](docs/preview13-clean-baseline.md).
+Install the current Preview 14 client to use this architecture. Source updates do not alter an already installed older client.

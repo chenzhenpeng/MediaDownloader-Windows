@@ -23,12 +23,15 @@ def main():
     runtimes = parser.add_mutually_exclusive_group(required=True)
     runtimes.add_argument("--runtime", type=Path)
     runtimes.add_argument("--environment-root", type=Path)
+    runtimes.add_argument("--production-runtime", type=Path)
     parser.add_argument("--trust-file", type=Path)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--source", required=True)
     parser.add_argument("--tools-directory", type=Path, required=True)
     parser.add_argument("--expect-auth-required", action="store_true")
     args = parser.parse_args()
+    if args.production_runtime:
+        args.runtime = args.production_runtime
     authenticated = False
     parser_version = "2.4.0"
     if args.environment_root:
@@ -72,6 +75,10 @@ def main():
         parser_version=parser_version,
         component="official-experimental",
     )
+    if args.production_runtime:
+        from media_downloader.engine import resolve_engine
+
+        engine = resolve_engine(args.production_runtime.resolve())
     service = TaskService(store, engine=engine, max_workers=1)
     states = []
 
@@ -105,7 +112,7 @@ def main():
             "state": task["state"],
             "error_code": task["error_code"],
             "used_app_cookie": False,
-            "production_enabled": False,
+            "production_enabled": bool(args.production_runtime),
             "authenticated_selection": authenticated,
             "task_id": task_id,
         }

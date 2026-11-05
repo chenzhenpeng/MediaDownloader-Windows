@@ -1,0 +1,5 @@
+# Original upstream package; do not resolve through the vendored development tree.
+parsehub==2.4.0
+# Upstream requires its current yt-dlp development API.
+yt-dlp[default]==2026.11.4.232659.dev0
+packaging==26.0

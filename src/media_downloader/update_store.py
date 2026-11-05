@@ -176,6 +176,10 @@ class EngineStore:
     def installed(self, identity, *, require_healthy=True, runtime_only=False):
         if identity == "bundled":
             return self.bundled
+        if isinstance(identity, str) and identity.startswith("pypi-"):
+            from .official_install import installed
+
+            return installed(self, identity, require_healthy=require_healthy, runtime_only=runtime_only)
         if not isinstance(identity, str) or not re.fullmatch(
             r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}-[0-9a-f]{12}", identity
         ):

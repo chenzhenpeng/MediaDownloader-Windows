@@ -1,7 +1,7 @@
-"""Opt-in task adapter for original ParseHub; not the production default.
+"""Task adapter for trusted, unmodified upstream packages in an isolated worker.
 
-Initial and resolved media URLs are checked here. Internal upstream provider
-traffic still needs network confinement before enabling this path by default.
+The application checks initial and resolved media URLs. Provider implementations
+and their internal network clients remain owned by the upstream package.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from .progress import ProgressReporter
 
 
 class OfficialAdapter:
-    def __init__(self, source, *, proxy=None, cookie=None, experimental=False):
-        if not experimental:
+    def __init__(self, source, *, proxy=None, cookie=None, experimental=False, official_runtime=False):
+        if not experimental and not official_runtime:
             raise AppError("OFFICIAL_NOT_ENABLED", "官方包任务链路尚未启用。", "check_engine")
         from parsehub import ParseHub
 
@@ -30,7 +30,13 @@ class OfficialAdapter:
         if parser is None or parser.__platform__ is None:
             raise AppError("UNSUPPORTED_URL", "解析组件不支持此链接。", "check_url")
         self.platform = parser.__platform__.id
-        if self.platform not in {"douyin", "kuaishou", "xhs", "bilibili", "weixin_channels"}:
+        if not official_runtime and self.platform not in {
+            "douyin",
+            "kuaishou",
+            "xhs",
+            "bilibili",
+            "weixin_channels",
+        }:
             raise AppError("PLATFORM_UNAVAILABLE", "该平台尚未完成官方包任务链路验证。", "check_engine")
         if self.platform == "weixin_channels" and not cookie:
             raise AppError("AUTH_REQUIRED", "请在本机配置腾讯元宝登录 Cookie 后重试。", "update_cookie")

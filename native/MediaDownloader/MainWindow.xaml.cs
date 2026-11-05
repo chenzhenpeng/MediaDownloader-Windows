@@ -137,7 +137,7 @@ public sealed partial class MainWindow : Window
         previousPage.IsEnabled = value.Number("offset") > 0;
         nextPage.IsEnabled = value.Number("offset") + 50 < value.Number("total");
         ApplyUpdateState(value.GetProperty("update"));
-        componentVersions.Text = $"版本 {value.String("parser_version", "未知")} · Windows 兼容修订 {value.String("parser_component_version", value.String("engine_version"))}";
+        componentVersions.Text = $"版本 {value.String("parser_version", "未知")} · 官方 PyPI 原包";
         runtimeVersions.Text = $"环境 {value.String("runtime_version", value.String("engine_version"))} · {(value.String("environment_source") == "managed" ? "应用管理" : "随应用提供")}";
         if (value.TryGetProperty("media_tools", out var tools)) {
             static string ShortVersion(string version) { var parts = version.Split(' ', StringSplitOptions.RemoveEmptyEntries); return parts.Length > 2 && parts[1] == "version" ? parts[2] : version; }

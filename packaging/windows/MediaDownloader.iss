@@ -5,8 +5,8 @@
 #ifndef ReleaseDir
   #error ReleaseDir is required
 #endif
-#define ReleaseVersion "0.2.0-preview.13"
-#define PayloadVersion "0.2.0-preview.13"
+#define ReleaseVersion "0.2.0-preview.14"
+#define PayloadVersion "0.2.0-preview.14"
 #ifdef QA
   #define ProductName "Media Downloader Installer QA"
 #else
@@ -23,7 +23,7 @@ AppName={#ProductName}
 AppVersion={#ReleaseVersion}
 AppVerName=Media Downloader {#ReleaseVersion}
 AppPublisher=Media Downloader Project
-VersionInfoVersion=0.2.0.13
+VersionInfoVersion=0.2.0.14
 DefaultDirName={localappdata}\Programs\MediaDownloader
 DefaultGroupName={#ProductName}
 PrivilegesRequired=lowest

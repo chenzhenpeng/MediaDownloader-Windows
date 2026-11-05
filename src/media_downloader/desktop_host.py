@@ -265,7 +265,7 @@ class DesktopHost:
                     and self.updates.cancelled.is_set()
                 ),
                 "locked": self.store.setting("engine_update_locked", False),
-                "auto": self.store.setting("update_auto_check", False),
+                "auto": self.store.setting("update_auto_check", True),
                 "can_rollback": update_state["current"] != update_state["last_good"],
             },
         }
@@ -459,6 +459,8 @@ def main():
         trust = Trust("stable", {})
     engines = EngineStore(data_directory(), trust, bundled)
     store = Store(data_directory() / "tasks.sqlite3")
+    if store.setting("update_auto_check", None) is None:
+        store.set_setting("update_auto_check", True)
     service = TaskService(store, engine=engines.recover())
     host = DesktopHost(app, store, service, engines)
     app.aboutToQuit.connect(lambda: None if host.closing else host.handle("shutdown", {}))

@@ -30,6 +30,20 @@ def resolve_engine(directory: Path | None = None, *, runtime: Engine | None = No
     manifest = json.loads((directory / "engine.json").read_text(encoding="utf-8"))
     if manifest["protocol"] != PROTOCOL or manifest["target"] != "windows-x86_64":
         raise ValueError("Incompatible engine")
+    if manifest.get("layout") == "official-embedded":
+        if not (directory / "python.exe").is_file() or not (directory / "worker_entry.py").is_file():
+            raise ValueError("Official runtime is incomplete")
+        return Engine(
+            manifest["engine_version"],
+            manifest["upstream_sha"],
+            str(directory / "python.exe"),
+            ("-B", "-I", str(directory / "worker_entry.py")),
+            manifest["runtime_id"],
+            manifest["engine_version"],
+            manifest["parsehub_version"],
+            "engine",
+            manifest["parsehub_version"],
+        )
     if manifest.get("component") == "parsehub":
         if not runtime or not runtime.runtime_id or runtime.runtime_id != manifest.get("requires_runtime_id"):
             raise ValueError("ParseHub component requires an updated client runtime")

@@ -33,6 +33,7 @@ class UpdateManager(QObject):
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="engine-update")
         self.future, self.job, self.prepared, self.manifest = None, None, None, None
         self.raw, self.signature = b"", b""
+        self.official_wheel = None
         self.cancelled = threading.Event()
         self.closing = False
         self.progress = (0, 0)
@@ -64,17 +65,46 @@ class UpdateManager(QObject):
     def check(self, component="all"):
         if component not in {"all", "parsehub", "engine"}:
             raise ValueError("Unknown update component")
-        if self.busy or self.closing or not self.engines.trust.configured:
+        if self.busy or self.closing:
             return
         self.target = component
         self.manifest = None
+        self.official_wheel = None
         self.cancelled.clear()
         self.job = "check"
         self.service.store.set_setting("update_last_check", time.time())
-        self._set("checking", "正在检查签名更新清单…")
+        self._set(
+            "checking",
+            "正在检查 ParseHub 官方 PyPI 版本…" if component == "parsehub" else "正在检查签名执行环境清单…",
+        )
         current = self.service.engine
 
         def run():
+            if component == "parsehub":
+                from packaging.version import Version
+
+                from .official_install import runtime_contract
+                from .official_packages import check_latest
+
+                _, runtime = self.engines.active_runtime()
+                runtime_contract(runtime)
+                wheel = check_latest(cancelled=self.cancelled.is_set)
+                if current.parser_version and Version(wheel.version) <= Version(current.parser_version):
+                    return None
+                self.official_wheel = wheel
+                return (
+                    {
+                        "component": "parsehub",
+                        "engine_version": wheel.version,
+                        "parsehub_version": wheel.version,
+                        "size_bytes": wheel.size,
+                        "official": True,
+                    },
+                    b"",
+                    b"",
+                )
+            if not self.engines.trust.configured:
+                raise UpdateError("UPDATE_SOURCE", "尚未配置执行环境的签名更新源。")
             raw, signature = self.feed.check(cancelled=self.cancelled.is_set)
             releases = self.engines.accept_catalog(raw, signature)
             selected = choose(releases, current, current.runtime_id, component=component)
@@ -101,12 +131,41 @@ class UpdateManager(QObject):
         self.cancelled.clear()
         self.progress = (0, self.manifest["size_bytes"])
         self.job = "install"
-        self._set("downloading", "正在下载、校验并自检候选内核…")
+        self._set(
+            "downloading",
+            "正在下载官方原包、校验依赖并自检…"
+            if self.manifest.get("official")
+            else "正在下载、校验并自检候选执行环境…",
+        )
 
         def run():
             with update_lock(self.engines.root, name="update-session.lock"):
                 with update_lock(self.engines.root):
                     self.engines.discard_staging()
+                if self.manifest.get("official"):
+                    from .official_install import install
+                    from .official_packages import download_wheel
+
+                    directory = self.engines.root / "updates" / "downloads"
+                    from .update_archive import no_reparse
+
+                    no_reparse(directory)
+                    directory.mkdir(parents=True, exist_ok=True)
+                    import uuid
+
+                    archive = directory / (uuid.uuid4().hex + ".whl")
+                    try:
+                        download_wheel(
+                            self.official_wheel,
+                            archive,
+                            cancelled=self.cancelled.is_set,
+                            progress=self._progress,
+                        )
+                        return install(
+                            self.engines, self.official_wheel, archive, cancelled=self.cancelled.is_set
+                        )
+                    finally:
+                        archive.unlink(missing_ok=True)
                 budget = self.manifest["size_bytes"] + self.manifest["unpacked_size_bytes"] + 100 * 1024**2
                 if shutil.disk_usage(self.engines.root).free < budget:
                     raise UpdateError("UPDATE_DISK", "磁盘空间不足，无法下载并安装此内核。")
@@ -193,14 +252,19 @@ class UpdateManager(QObject):
                         self._set(
                             "idle",
                             {
-                                "parsehub": "没有兼容的更高版本解析组件。",
+                                "parsehub": "当前 ParseHub 已是官方最新稳定版。",
                                 "engine": "没有兼容的更高版本运行环境。",
                             }.get(self.target, "当前解析组件和运行环境已是兼容的最新版本。"),
                         )
                     else:
                         self.manifest, self.raw, self.signature = result
                         if newer(self.manifest, self.service.engine):
-                            self._set("available", "发现经过签名验证的兼容组件，可选择安装。")
+                            self._set(
+                                "available",
+                                "发现官方 PyPI 原包，可下载并验证执行环境兼容性。"
+                                if self.manifest.get("official")
+                                else "发现经过签名验证的兼容组件，可选择安装。",
+                            )
                         else:
                             self.manifest = None
                             self._set("idle", "没有更高版本的兼容组件，当前版本保持不变。")
@@ -241,7 +305,7 @@ class UpdateManager(QObject):
             and self.service.store.setting("update_auto_check", False)
             and time.time() - self.service.store.setting("update_last_check", 0) >= 86400
         ):
-            self.check()
+            self.check("parsehub")
 
     def _activated(self, engine):
         if self.closing:

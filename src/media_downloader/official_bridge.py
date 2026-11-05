@@ -1,8 +1,4 @@
-"""Candidate official-package boundary; not enabled in the production worker.
-
-Only discovery and result conversion are exposed until network and execution
-isolation have equivalent coverage to the existing worker.
-"""
+"""Convert official upstream discovery/results to the native application's contracts."""
 
 from __future__ import annotations
 
@@ -14,6 +10,7 @@ from dataclasses import replace
 
 from .contracts import Capability, MediaInfo, Preview
 from .errors import AppError
+from .platforms import PLATFORMS
 
 
 def discover_capabilities() -> list[Capability]:
@@ -25,11 +22,14 @@ def discover_capabilities() -> list[Capability]:
         if platform is None:
             continue
         # These are upstream content categories, not promises of tested downloads.
-        types = tuple(str(value) for value in parser.__supported_type__)
+        spec = PLATFORMS.get(platform.id)
+        types = spec.media_types if spec else tuple(str(value) for value in parser.__supported_type__)
         previous = capabilities.get(platform.id)
         if previous:
             types = tuple(dict.fromkeys((*previous.media_types, *types)))
-        capabilities[platform.id] = Capability(platform.id, platform.display_name, types)
+        capabilities[platform.id] = Capability(
+            platform.id, spec.name if spec else platform.display_name, types
+        )
     return list(capabilities.values())
 
 

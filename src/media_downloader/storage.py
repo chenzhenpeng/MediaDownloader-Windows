@@ -43,7 +43,7 @@ def data_directory() -> Path:
     base = (
         Path(override)
         if override
-        else Path(os.environ.get("LOCALAPPDATA", Path.home())) / "MediaDownloader" / "v4"
+        else Path(os.environ.get("LOCALAPPDATA", Path.home())) / "MediaDownloader" / "v5"
     )
     base.mkdir(parents=True, exist_ok=True)
     return base

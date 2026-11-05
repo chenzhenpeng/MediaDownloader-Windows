@@ -38,6 +38,8 @@ def package_release(
         minimum = "0.2.0.dev6"
     if metadata.get("adapter_abi") and Version(minimum) < Version("0.2.0.dev11"):
         minimum = "0.2.0.dev11"
+    if metadata.get("layout") == "official-embedded":
+        minimum = "0.2.0.dev14"
     if metadata["protocol"] != PROTOCOL or metadata["target"] != "windows-x86_64":
         raise ValueError("Engine descriptor is incompatible with this release builder")
     output.mkdir(parents=True, exist_ok=False)
@@ -82,6 +84,9 @@ def package_release(
         manifest["parser_component_version"] = metadata.get(
             "parser_component_version", metadata["engine_version"]
         )
+    if metadata.get("source_kind") == "pypi-wheel":
+        manifest["source_kind"] = "pypi-wheel"
+        manifest["parsehub_version"] = metadata["parsehub_version"]
     raw = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
     signature = key.sign(raw)
     trust = Trust(

@@ -1,13 +1,13 @@
-﻿Media Downloader 0.2.0-preview.13
+﻿Media Downloader 0.2.0-preview.14
 
 这是 WinUI 3 原生界面的预览安装版，包含运行库和解析内核，无需单独安装 Python 或 .NET。
 
 安装前请关闭正在运行的 Media Downloader。安装或升级不会删除现有任务、设置、登录凭据和下载文件。
 默认程序位置：当前用户的 LocalAppData\Programs\MediaDownloader。
-当前版本使用全新数据目录 LocalAppData\MediaDownloader\v4，不迁移旧版设置、Cookie 和任务历史；需重新填写设置。旧数据和下载文件不会删除。
+当前版本使用全新数据目录 LocalAppData\MediaDownloader\v5，不迁移旧版设置、Cookie 和任务历史；需重新填写设置。旧数据和下载文件不会删除。
 
 支持的平台和文件类型可在应用中查看。部分平台需要登录凭据或代理，能力目录不代表每个平台当前都能下载。
-ParseHub 解析组件和执行运行环境通过签名组件目录独立更新；应用包通过安装程序升级。
+ParseHub 解析组件直接更新官方 PyPI 原包；执行运行环境通过 GitHub 签名组件目录更新；应用包通过安装程序升级。
 
 本包尚未使用产品代码签名证书签名。商业正式发布验收、多显示器及跨机器测试尚未完成。
 

@@ -7,6 +7,24 @@ from media_downloader.errors import AppError
 from media_downloader.official_adapter import OfficialAdapter
 
 
+def test_official_capabilities_are_usable_by_native_ui():
+    from media_downloader import PROTOCOL
+    from media_downloader.official_bridge import discover_capabilities
+    from media_downloader.ui_capabilities import capability_copy
+
+    capabilities = discover_capabilities()
+    rows = capability_copy(
+        {
+            "protocol": PROTOCOL,
+            "engine_version": "test",
+            "capabilities": [item.to_dict() for item in capabilities],
+        },
+        "test",
+    )
+    assert len(rows) == 24
+    assert any(name == "哔哩哔哩" and "视频" in types for name, types in rows)
+
+
 def hub_for(monkeypatch, platform="douyin"):
     class Hub:
         def get_parser(self, _):

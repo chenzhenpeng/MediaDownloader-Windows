@@ -157,7 +157,8 @@ def verify_manifest(raw: bytes, signature: bytes, trust: Trust, *, installed=Fal
             fail("UPDATE_INCOMPATIBLE", "此内核与当前客户端版本不兼容。")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}", data["engine_version"]):
             raise ValueError("Invalid version")
-        for key, length in (("sha256", 64), ("inventory_sha256", 64), ("upstream_sha", 40)):
+        source_length = 64 if data.get("source_kind") == "pypi-wheel" else 40
+        for key, length in (("sha256", 64), ("inventory_sha256", 64), ("upstream_sha", source_length)):
             if not isinstance(data[key], str) or not re.fullmatch(
                 r"[0-9a-f]{" + str(length) + "}", data[key]
             ):

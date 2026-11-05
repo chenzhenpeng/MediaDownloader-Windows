@@ -81,7 +81,7 @@ def probe_engine(engine, *, cancelled=lambda: False):
                     data["protocol"] != PROTOCOL
                     or data["engine_version"] != engine.version
                     or data["upstream_sha"] != engine.upstream_sha
-                    or not data["frozen"]
+                    or not (data["frozen"] or data.get("runtime_layout") == "official-embedded")
                     or data["platform_count"] < 3
                     or action == "--self-test"
                     and data.get("passed") is not True

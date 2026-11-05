@@ -125,8 +125,7 @@ public sealed partial class MainWindow
         connectionGroup.Children.Add(connectionSection); body.Children.Add(connectionGroup);
         var updates = SettingsGroup("解析组件");
         updateCheck = ActionButton("检查更新", async (_, _) => {
-            if (snapshot.GetProperty("update").Bool("configured")) await CallAsync("update", new { action = "check", component = "parsehub" });
-            else await CallAsync("official_update");
+            await CallAsync("update", new { action = "check", component = "parsehub" });
         });
         updateInstall = ActionButton("安装解析更新", async (_, _) => await CallAsync("update", new { action = "install", component = "parsehub" }), true);
         updateCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
@@ -137,8 +136,8 @@ public sealed partial class MainWindow
         var updateBody = new StackPanel(); updateBody.Children.Add(coreRow);
         componentVersions.Style = (Style)Application.Current.Resources["SecondaryText"]; componentVersions.FontSize = 12; componentVersions.Margin = new Thickness(64, 0, 16, 8);
         updateBody.Children.Add(componentVersions);
-        var officialPage = new HyperlinkButton { Content = "查看 ParseHub 官方发布", Padding = new Thickness(0), FontSize = 12 };
-        officialPage.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/z-mio/ParseHub/releases"));
+        var officialPage = new HyperlinkButton { Content = "查看 ParseHub 官方 PyPI 包", Padding = new Thickness(0), FontSize = 12 };
+        officialPage.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri("https://pypi.org/project/parsehub/"));
         officialPage.Margin = new Thickness(64, 0, 16, 12); updateBody.Children.Add(officialPage);
         updates.Children.Add(SettingsCard(updateBody)); body.Children.Add(updates);
         var environment = SettingsGroup("执行环境");
@@ -205,7 +204,7 @@ public sealed partial class MainWindow
         ApplyComponentCard(state, scope == "parsehub", true, updateCheck, updateInstall, updateCancel, updateMessage, updateProgress);
         ApplyComponentCard(state, scope == "engine", false, runtimeCheck, runtimeInstall, runtimeCancel, runtimeMessage, runtimeProgress);
         updateAdvanced.Visibility = configured || state.Bool("can_rollback") || state.Bool("locked") ? Visibility.Visible : Visibility.Collapsed;
-        updateAuto.IsEnabled = state.Bool("configured"); updateAuto.IsOn = state.Bool("auto"); updateLock.IsOn = state.Bool("locked");
+        updateAuto.IsEnabled = true; updateAuto.IsOn = state.Bool("auto"); updateLock.IsOn = state.Bool("locked");
         updateRollback.IsEnabled = state.Bool("can_rollback") && !state.Bool("busy") && !state.Bool("locked");
     }
 
@@ -214,10 +213,10 @@ public sealed partial class MainWindow
         var configured = state.Bool("configured"); var official = state.GetProperty("official");
         var status = active ? state.String("status") : "idle";
         var cancelling = active && state.Bool("cancel_requested");
-        var cancellable = configured && active && status is ("checking" or "downloading" or "waiting");
-        message.Text = active ? configured ? state.String("message") : parser ? official.String("message") : "尚未配置运行环境更新源。"
-            : parser ? "独立更新平台解析与兼容适配代码。" : "完整管理 worker、Python 和配套依赖。";
-        check.Content = parser ? configured ? "检查解析更新" : "检查官方更新" : "检查环境更新";
+        var cancellable = (configured || parser) && active && status is ("checking" or "downloading" or "waiting");
+        message.Text = active ? state.String("message")
+            : parser ? "直接更新官方 PyPI 原包，版本与上游一致；依赖变化时单独更新执行环境。" : "完整管理 worker、Python 和配套依赖。";
+        check.Content = parser ? "检查官方更新" : "检查环境更新";
         install.Content = parser ? "安装解析组件" : "安装运行环境";
         check.Visibility = cancellable || status == "available" ? Visibility.Collapsed : Visibility.Visible;
         check.IsEnabled = !state.Bool("busy") && (configured || parser && official.String("status") != "checking");

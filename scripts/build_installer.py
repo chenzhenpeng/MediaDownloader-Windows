@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "0.2.0-preview.13"
+RELEASE = "0.2.0-preview.14"
 
 
 def machine(path):
@@ -45,12 +45,14 @@ def main():
         "MainWindow.xbf",
         "App.xbf",
         "backend/MediaBackend.exe",
-        "engine/media-engine.exe",
         "engine/engine.json",
     ]
     if not all((payload / name).is_file() for name in required):
         raise RuntimeError("Build the native payload first")
     engine = json.loads((payload / "engine/engine.json").read_text(encoding="utf-8"))
+    executable = "python.exe" if engine.get("layout") == "official-embedded" else "media-engine.exe"
+    if not (payload / "engine" / executable).is_file():
+        raise RuntimeError("Execution runtime is missing")
     files = sorted(path for path in payload.rglob("*") if path.is_file())
     if any(path.suffix in {".db", ".sqlite3", ".lock"} for path in files):
         raise RuntimeError("Unexpected user data in the distribution")
@@ -80,7 +82,7 @@ def main():
     assert machine(installer) == 0x8664, "The setup loader itself must be native x64"
     report = {
         "release": RELEASE,
-        "client": "0.2.0.dev13",
+        "client": "0.2.0.dev14",
         "setup_machine": "x64",
         "engine": engine["engine_version"],
         "installer": installer.name,
