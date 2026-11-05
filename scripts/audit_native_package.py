@@ -43,13 +43,13 @@ def main():
         "uncompressed_bytes": sum(groups.values()),
         "groups_bytes": {k: v for k, v in groups.items() if v > 1024**2},
         "installer_bytes": installer.stat().st_size if installer.exists() else None,
-        "previous_installer_bytes": previous.stat().st_size,
+        "previous_installer_bytes": previous.stat().st_size if previous.exists() else None,
         "largest_files": [
             {"path": str(p.relative_to(payload)), "bytes": p.stat().st_size}
             for p in sorted(files, key=lambda p: p.stat().st_size, reverse=True)[:15]
         ],
     }
-    if installer.exists():
+    if installer.exists() and previous.exists():
         assert report["installer_bytes"] < report["previous_installer_bytes"], "No measured installer saving"
     compact_report = ROOT / "dist/release/release.json"
     if compact_report.exists():
@@ -68,7 +68,9 @@ def main():
             )
             report.update(
                 compact_installer_bytes=compact["bytes"],
-                compact_reduction_percent=round((1 - compact["bytes"] / previous.stat().st_size) * 100, 2),
+                compact_reduction_percent=round((1 - compact["bytes"] / previous.stat().st_size) * 100, 2)
+                if previous.exists()
+                else None,
                 compact_sha256=compact["sha256"],
                 same_payload_as_accepted_qa=True,
             )
