@@ -38,7 +38,7 @@ def main():
                     command += ["--smoke-maximized", "true"]
                 subprocess.run(command, timeout=60, check=True)
                 value = json.loads(report.read_text(encoding="utf-8"))
-                assert value["backend"]["client_version"] == "0.2.0.dev12"
+                assert value["backend"]["client_version"] == "0.2.0.dev13"
                 assert all(value["layout"]["checks"].values())
                 reports.append(
                     {

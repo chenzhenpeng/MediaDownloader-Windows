@@ -38,17 +38,21 @@ def prepare_imports():
         sys.path.insert(0, str(upstream))
 
 
-async def execute(command: dict):
-    prepare_imports()
+async def execute(command: dict, *, adapter_factory=None):
+    if adapter_factory is None:
+        prepare_imports()
     from .diagnostics import configure_tools
 
     command["_phase"] = "startup"
     configure_tools()
-    from .adapter import ParseHubAdapter
+    if adapter_factory is None:
+        from .adapter import ParseHubAdapter
+
+        adapter_factory = ParseHubAdapter
 
     emit(command, "started", {"engine_version": ENGINE_VERSION, "upstream_sha": UPSTREAM_SHA})
     command["_phase"] = "parsing"
-    adapter = ParseHubAdapter(command["source"], proxy=command.get("proxy"), cookie=command.get("cookie"))
+    adapter = adapter_factory(command["source"], proxy=command.get("proxy"), cookie=command.get("cookie"))
     result, preview_model = await adapter.inspect()
     preview = preview_model.to_dict()
     if command["action"] == "inspect":

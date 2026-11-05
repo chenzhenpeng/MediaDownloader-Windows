@@ -33,3 +33,7 @@ Upstream polling prepares candidate PRs and replays reviewed patches. It does no
 [Component architecture](docs/components.md) | [Development plan](docs/development-plan.md) | [Patch maintenance](docs/upstream-patches.md) | [Platform coverage](docs/platforms-integration.md)
 
 Vendored ParseHub retains its [MIT license](upstream-ParseHub/LICENSE). Bundled third-party components retain their respective licenses. Older Qt notes are preserved in [legacy notes](docs/legacy-qt-readme.md).
+
+## Original-package migration
+
+Preview 13 keeps the accepted production engine. The direct official ParseHub package path has passed isolated task-service validation but is still explicitly experimental; see [migration status](docs/official-package-status.md). Updating the source repository does not enable this path in installed clients.

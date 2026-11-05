@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "0.2.0-preview.12"
+RELEASE = "0.2.0-preview.13"
 
 
 def machine(path):
@@ -80,7 +80,7 @@ def main():
     assert machine(installer) == 0x8664, "The setup loader itself must be native x64"
     report = {
         "release": RELEASE,
-        "client": "0.2.0.dev12",
+        "client": "0.2.0.dev13",
         "setup_machine": "x64",
         "engine": engine["engine_version"],
         "installer": installer.name,

@@ -57,7 +57,7 @@ def main():
         if not output.exists():
             raise RuntimeError(f"No successful layout report: {mode}/{page}")
         report = json.loads(output.read_text(encoding="utf-8"))
-        assert report["backend"]["client_version"] == "0.2.0.dev12"
+        assert report["backend"]["client_version"] == "0.2.0.dev13"
         assert report["layout"]["checks"] and all(report["layout"]["checks"].values()), report["layout"]
         reports.append(
             {

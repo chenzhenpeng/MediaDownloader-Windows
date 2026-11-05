@@ -71,7 +71,12 @@ def package_release(
         "key_id": key_id,
     }
     if metadata.get("component") == "parsehub":
-        manifest.update(component="parsehub", requires_runtime_id=metadata["requires_runtime_id"])
+        manifest.update(
+            component="parsehub",
+            requires_runtime_id=metadata["requires_runtime_id"],
+            parsehub_version=metadata["parsehub_version"],
+            windows_revision=metadata["engine_version"],
+        )
     elif metadata.get("runtime_id"):
         manifest["runtime_id"] = metadata["runtime_id"]
         manifest["parser_component_version"] = metadata.get(

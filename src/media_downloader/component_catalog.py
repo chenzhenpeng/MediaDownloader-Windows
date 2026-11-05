@@ -20,6 +20,11 @@ def newer(manifest, engine):
     if manifest.get("component", "engine") == "engine":
         current = engine.runtime_version or engine.version
     try:
+        if manifest.get("parsehub_version") and engine.parser_version:
+            upstream = Version(manifest["parsehub_version"])
+            installed_upstream = Version(engine.parser_version)
+            if upstream < installed_upstream:
+                return False
         if manifest.get("component", "engine") == "engine" and engine.component == "parsehub":
             baseline = manifest.get("parser_component_version", manifest["engine_version"])
             if Version(baseline) < Version(engine.parser_component_version or engine.version):
@@ -94,6 +99,7 @@ def choose(releases, engine, runtime_id, *, component="all"):
         candidates,
         key=lambda item: (
             item[0].get("component") == "parsehub",
+            Version(item[0].get("parsehub_version", "0")),
             Version(item[0]["engine_version"]),
         ),
         default=None,

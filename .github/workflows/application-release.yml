@@ -39,12 +39,15 @@ jobs:
       - run: uv run --no-sync python scripts/build_native.py --engine-dir dist/ci/media-engine
       - run: uv run --no-sync python scripts/fetch_installer_toolchain.py
       - run: uv run --no-sync python scripts/build_installer.py
+      - run: uv run --no-sync python scripts/build_installer.py --qa
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: application-package-for-desktop-acceptance
           path: |
             dist/release/*Setup.exe
             dist/release/release.json
+            dist/release/qa-release.json
+            dist/release/*payload.json
             dist/release/SHA256SUMS.txt
       - name: Create reviewable application draft
         env:

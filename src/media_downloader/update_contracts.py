@@ -144,6 +144,14 @@ def verify_manifest(raw: bytes, signature: bytes, trust: Trust, *, installed=Fal
             r"rt1-[0-9a-f]{24}", data.get("requires_runtime_id", "")
         ):
             raise ValueError("Missing parser runtime contract")
+        if "parsehub_version" in data:
+            Version(data["parsehub_version"])
+        if (
+            data.get("component") == "parsehub"
+            and "windows_revision" in data
+            and data["windows_revision"] != data["engine_version"]
+        ):
+            raise ValueError("Windows revision differs from release identity")
         if (
             not Version(data["app_min_version"])
             <= Version(__version__)

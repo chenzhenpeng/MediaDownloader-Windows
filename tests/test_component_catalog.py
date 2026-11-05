@@ -61,6 +61,22 @@ def test_separate_settings_checks_cannot_select_the_other_component():
     assert choose([runtime], engine, "runtime", component="parsehub") is None
 
 
+def test_windows_revision_cannot_hide_an_upstream_downgrade():
+    engine = Engine(
+        "0.1.6",
+        UPSTREAM_SHA,
+        "unused",
+        parser_version="2.4.0",
+        component="parsehub",
+        parser_component_version="0.1.6",
+    )
+    assert not newer(
+        {"component": "parsehub", "engine_version": "9.0.0", "parsehub_version": "2.3.0"}, engine
+    )
+    assert newer({"component": "parsehub", "engine_version": "0.1.7", "parsehub_version": "2.4.0"}, engine)
+    assert newer({"component": "parsehub", "engine_version": "0.1.8", "parsehub_version": "2.5.0"}, engine)
+
+
 def test_catalog_is_signed_bounded_and_replay_protected(tmp_path):
     key = Ed25519PrivateKey.generate()
     trust = Trust("beta", {"local-test": key.public_key().public_bytes_raw()}, local_feed=tmp_path)

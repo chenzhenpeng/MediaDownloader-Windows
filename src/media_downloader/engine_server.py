@@ -39,7 +39,7 @@ def stdin_chunks():
         yield buffer.raw[: count.value]
 
 
-async def serve():
+async def serve(*, execute=None):
     from . import worker
     from .contracts import validate_command
     from .diagnostics import configure_tools
@@ -81,7 +81,7 @@ async def serve():
     async def run_command(command):
         nonlocal current, execution
         try:
-            await worker.execute(command)
+            await (execute or worker.execute)(command)
         except asyncio.CancelledError:
             worker.emit(command, "cancelled", {})
         except Exception as exc:

@@ -56,6 +56,7 @@ def build(output, version, runtime_manifest):
         "component": "parsehub",
         "adapter_abi": 1,
         "engine_version": version,
+        "windows_revision": version,
         "upstream_sha": UPSTREAM_SHA,
         "parsehub_version": parser_version,
         "patchset": "sha256-"
@@ -69,7 +70,11 @@ def build(output, version, runtime_manifest):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--version", required=True)
+    parser.add_argument(
+        "--version",
+        required=True,
+        help="Immutable Windows compatibility revision; ParseHub version is read from upstream metadata",
+    )
     parser.add_argument("--runtime-manifest", type=Path, required=True)
     parser.add_argument("--runtime-signature", type=Path, required=True)
     parser.add_argument("--trust", type=Path, default=ROOT / "packaging/update-trust.json")
