@@ -38,6 +38,7 @@ public sealed partial class MainWindow
                 var status = updateFixture is "validating" ? "downloading" : updateFixture is "cancelling" ? "checking" : updateFixture;
                 ApplyUpdateState(JsonSerializer.SerializeToElement(new {
                     configured = updateFixture != "unconfigured", status,
+                    scope = App.Option("--smoke-update-component") ?? "parsehub", component = App.Option("--smoke-update-component") ?? "parsehub",
                     message = "界面验收：更新状态示例", busy = status is "checking" or "downloading" or "waiting",
                     locked = false, auto = false, can_rollback = false, cancel_requested = updateFixture == "cancelling",
                     downloaded_bytes = updateFixture == "validating" ? 1000 : 400, total_bytes = 1000,
@@ -132,15 +133,20 @@ public sealed partial class MainWindow
             checks["task_filter_selected"] = SelectedTaskState == (page switch { "in_progress" => "active", "completed" => "completed", "failed" => "failed", _ => "" });
         }
         if (page == "settings") {
+            var environmentFixture = App.Option("--smoke-update-component") == "engine" && App.Option("--smoke-update-state") != "unconfigured";
+            var actions = environmentFixture ? runtimeActions : updateActions; var updateRow = environmentFixture ? settingsRuntimeRow : settingsUpdateRow;
+            var cancel = environmentFixture ? runtimeCancel : updateCancel; var check = environmentFixture ? runtimeCheck : updateCheck;
+            var install = environmentFixture ? runtimeInstall : updateInstall; var progress = environmentFixture ? runtimeProgress : updateProgress;
+            checks["separate_component_cards"] = settingsRuntimeRow != settingsUpdateRow && runtimeActions.Parent == settingsRuntimeRow && updateActions.Parent == settingsUpdateRow;
             checks["setting_and_expander_text_align"] = Math.Abs(Left((FrameworkElement)settingsThemeRow.Children[0]) - Left((FrameworkElement)connectionHeader.Children[1])) < 2;
-            checks["update_actions_inside_card"] = Left(updateActions) >= Left(settingsUpdateRow) && Right(updateActions) <= Right(settingsUpdateRow) - 15;
-            checks["one_contextual_update_action"] = updateActions.Children.OfType<FrameworkElement>().Count(child => child.Visibility == Microsoft.UI.Xaml.Visibility.Visible) == 1;
+            checks["update_actions_inside_card"] = Left(actions) >= Left(updateRow) && Right(actions) <= Right(updateRow) - 15;
+            checks["one_contextual_update_action"] = actions.Children.OfType<FrameworkElement>().Count(child => child.Visibility == Microsoft.UI.Xaml.Visibility.Visible) == 1;
             if (App.Option("--smoke-notice-navigation") == "true") checks["old_notice_cleared_on_navigation"] = !GlobalNotice.IsOpen;
             var updateFixture = App.Option("--smoke-update-state");
-            if (updateFixture is "checking" or "downloading" or "validating" or "waiting" or "cancelling") checks["cancel_action_stays_in_row"] = updateCancel.Visibility == Microsoft.UI.Xaml.Visibility.Visible && updateCheck.Visibility == Microsoft.UI.Xaml.Visibility.Collapsed;
-            if (updateFixture == "downloading") checks["actual_download_progress_rendered"] = !updateProgress.IsIndeterminate && updateProgress.Value == 40;
-            if (updateFixture == "cancelling") checks["repeated_cancel_disabled"] = !updateCancel.IsEnabled;
-            if (updateFixture == "available") checks["install_action_visible"] = updateInstall.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
+            if (updateFixture is "checking" or "downloading" or "validating" or "waiting" or "cancelling") checks["cancel_action_stays_in_row"] = cancel.Visibility == Microsoft.UI.Xaml.Visibility.Visible && check.Visibility == Microsoft.UI.Xaml.Visibility.Collapsed;
+            if (updateFixture == "downloading") checks["actual_download_progress_rendered"] = !progress.IsIndeterminate && progress.Value == 40;
+            if (updateFixture == "cancelling") checks["repeated_cancel_disabled"] = !cancel.IsEnabled;
+            if (updateFixture == "available") checks["install_action_visible"] = install.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
             checks["settings_uses_available_width"] = right - Right(settingsThemeRow) >= 0 && right - Right(settingsThemeRow) <= 48;
             checks["cookie_uses_masked_control"] = cookieInput.PasswordRevealMode == Microsoft.UI.Xaml.Controls.PasswordRevealMode.Peek;
             if (App.Option("--smoke-cookie-fixture") == "true") checks["saved_cookie_is_reloaded"] = cookieInput.Password == "test_cookie=fixture";

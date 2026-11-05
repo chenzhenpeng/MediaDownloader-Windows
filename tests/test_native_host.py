@@ -2,6 +2,8 @@ import json
 import threading
 from types import SimpleNamespace
 
+import pytest
+
 from media_downloader.desktop_host import DesktopHost
 from media_downloader.repository import Store
 
@@ -109,5 +111,24 @@ def test_snapshot_is_paginated_and_does_not_expose_credentials(tmp_path):
         assert store.setting("douyin.cookie") == saved
         host.handle("connection", {"platform": "douyin", "clear_cookie": True})
         assert host.handle("connection_read", {"platform": "douyin"}) == {"cookie": ""}
+        checked = []
+        host.updates.check = lambda component: checked.append(component)
+        host.handle("update", {"action": "check", "component": "engine"})
+        host.handle("update", {"action": "check", "component": "parsehub"})
+        assert checked == ["engine", "parsehub"]
+        installed = []
+        host.updates.manifest = {"component": "engine"}
+        host.updates.install = lambda: installed.append("engine")
+        with pytest.raises(ValueError, match="component changed"):
+            host.handle("update", {"action": "install", "component": "parsehub"})
+        assert installed == []
+        host.handle("update", {"action": "install", "component": "engine"})
+        assert installed == ["engine"]
+        host.updates.engines.bundled = SimpleNamespace(program="bundled.exe")
+        host.updates.engines.state = lambda: {"current": "selected-parser", "last_good": "bundled"}
+        host.service.engine.program = "bundled.exe"
+        assert host.snapshot()["environment_source"] == "bundled"
+        host.service.engine.program = "managed.exe"
+        assert host.snapshot()["environment_source"] == "managed"
     finally:
         store.close()

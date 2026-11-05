@@ -48,6 +48,19 @@ def test_normal_updates_reject_downgrades_and_compare_components_separately():
     assert newer({"engine_version": "1.6.0", "parser_component_version": "2.0.0"}, parser)
 
 
+def test_separate_settings_checks_cannot_select_the_other_component():
+    engine = Engine("1.4.0", UPSTREAM_SHA, "unused", runtime_id="runtime")
+    runtime = ({"engine_version": "1.5.0"}, b"runtime", b"signature")
+    parser = (
+        {"component": "parsehub", "engine_version": "1.6.0", "requires_runtime_id": "runtime"},
+        b"parser",
+        b"signature",
+    )
+    assert choose([runtime, parser], engine, "runtime", component="parsehub") == parser
+    assert choose([runtime, parser], engine, "runtime", component="engine") == runtime
+    assert choose([runtime], engine, "runtime", component="parsehub") is None
+
+
 def test_catalog_is_signed_bounded_and_replay_protected(tmp_path):
     key = Ed25519PrivateKey.generate()
     trust = Trust("beta", {"local-test": key.public_key().public_bytes_raw()}, local_feed=tmp_path)

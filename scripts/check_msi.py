@@ -16,18 +16,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    package = ROOT / "build/msi-qa/MediaDownloader-0.2.0-preview.11-win-x64-QA.msi"
+    package = ROOT / "build/msi-qa/MediaDownloader-0.2.0-preview.12-win-x64-QA.msi"
     metadata = inspect(package)
     assert metadata["all_users"] == "1", "Protected-drive installs must use the elevated installer service"
     qa = ROOT / ".local/msi-qa" / str(time.time_ns())
     destination, data = qa / "程序目录", qa / "state"
     qa.mkdir(parents=True)
     installer = Path(os.environ["SystemRoot"]) / "System32/msiexec.exe"
-    executable = destination / "versions/0.2.0-preview.11/MediaDownloader.exe"
+    executable = destination / "versions/0.2.0-preview.12/MediaDownloader.exe"
     report = {"qa_directory": str(qa), "architecture": metadata}
     default_executable = (
         Path(os.environ["ProgramFiles"])
-        / "MediaDownloaderMSIQA/versions/0.2.0-preview.11/MediaDownloader.exe"
+        / "MediaDownloaderMSIQA/versions/0.2.0-preview.12/MediaDownloader.exe"
     )
     default_existed = default_executable.exists()
 
@@ -69,7 +69,7 @@ def main():
             check=True,
         )
         value = json.loads(output.read_text(encoding="utf-8"))
-        assert value["backend"]["client_version"] == "0.2.0.dev11"
+        assert value["backend"]["client_version"] == "0.2.0.dev12"
         assert all(value["layout"]["checks"].values())
         assert "test_cookie=fixture" not in output.read_text(encoding="utf-8")
         return value

@@ -3,7 +3,7 @@
   <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
   <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
   <RootNamespace>MediaDownloader</RootNamespace><AssemblyName>MediaDownloader</AssemblyName>
-  <Version>0.2.0</Version><AssemblyVersion>0.2.0.0</AssemblyVersion><FileVersion>0.2.0.11</FileVersion>
+  <Version>0.2.0</Version><AssemblyVersion>0.2.0.0</AssemblyVersion><FileVersion>0.2.0.12</FileVersion>
   <ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
   <Platforms>x64</Platforms><PlatformTarget>x64</PlatformTarget><RuntimeIdentifier>win-x64</RuntimeIdentifier>
   <UseWinUI>true</UseWinUI><EnableMsixTooling>false</EnableMsixTooling><WindowsPackageType>None</WindowsPackageType>

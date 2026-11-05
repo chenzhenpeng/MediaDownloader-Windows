@@ -36,7 +36,7 @@ def main():
         "yt-dlp.exe": lock["yt-dlp"]["sha256"],
     }.items():
         assert hashlib.file_digest((tools / name).open("rb"), "sha256").hexdigest() == expected
-    installer = ROOT / "dist/release/MediaDownloader-0.2.0-preview.11-win-x64.msi"
+    installer = ROOT / "dist/release/MediaDownloader-0.2.0-preview.12-win-x64.msi"
     previous = ROOT / "dist/release/MediaDownloader-0.2.0-preview.6-win-x64.msi"
     report = {
         "passed": True,
@@ -54,7 +54,7 @@ def main():
     compact_report = ROOT / "dist/release/release.json"
     if compact_report.exists():
         compact = json.loads(compact_report.read_bytes())
-        if compact.get("release") == "0.2.0-preview.11":
+        if compact.get("release") == "0.2.0-preview.12":
             setup = ROOT / "dist/release" / compact["installer"]
             assert setup.stat().st_size == compact["bytes"]
             assert hashlib.file_digest(setup.open("rb"), "sha256").hexdigest() == compact["sha256"]
@@ -74,7 +74,7 @@ def main():
                 compact_sha256=compact["sha256"],
                 same_payload_as_accepted_qa=True,
             )
-    target = ROOT / "review/native/package-audit-preview11.json"
+    target = ROOT / "review/native/package-audit-preview12.json"
     assert report["installer_bytes"] or report.get("compact_installer_bytes"), (
         "No completed installer to audit"
     )

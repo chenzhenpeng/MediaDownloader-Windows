@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import QCoreApplication, QLockFile, QStandardPaths, QTimer
 
 from . import __version__
-from .engine import resolve_engine
+from .engine import resolve_engine, tool_versions
 from .engine_server import stdin_chunks
 from .official_update import check_official_release
 from .platforms import PLATFORMS
@@ -202,6 +202,16 @@ class DesktopHost:
             "parser_version": getattr(self.service.engine, "parser_version", ""),
             "parser_component_version": getattr(self.service.engine, "parser_component_version", "")
             or self.service.engine.version,
+            "environment_source": "bundled"
+            if update_state["current"] == "bundled"
+            or (
+                getattr(getattr(self.updates.engines, "bundled", None), "program", None)
+                and self.service.engine.program == self.updates.engines.bundled.program
+            )
+            else "managed",
+            "media_tools": tool_versions(self.service.engine)
+            if getattr(self.service.engine, "program", None)
+            else {},
             "counts": {
                 "active": sum(t["state"] not in TERMINAL for t in tasks),
                 "history": sum(t["state"] in TERMINAL for t in tasks),
@@ -235,6 +245,7 @@ class DesktopHost:
                 for key, spec in PLATFORMS.items()
             ],
             "update": {
+                "scope": getattr(self.updates, "target", "all"),
                 "official": getattr(
                     self, "official_result", {"status": "idle", "message": "可检查官方版本。"}
                 ),
@@ -388,7 +399,15 @@ class DesktopHost:
                 )
         elif method == "update":
             action = p["action"]
-            if action in {"check", "install", "cancel", "rollback"}:
+            if action == "check":
+                self.updates.check(str(p.get("component", "all")))
+            elif action == "install":
+                requested = str(p.get("component", "all"))
+                selected = (getattr(self.updates, "manifest", None) or {}).get("component", "engine")
+                if requested != "all" and requested != selected:
+                    raise ValueError("Update component changed; check again")
+                self.updates.install()
+            elif action in {"cancel", "rollback"}:
                 getattr(self.updates, action)()
             elif action == "lock":
                 self.store.set_setting("engine_update_locked", bool(p["value"]))

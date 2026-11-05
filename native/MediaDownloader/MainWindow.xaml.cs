@@ -137,8 +137,14 @@ public sealed partial class MainWindow : Window
         previousPage.IsEnabled = value.Number("offset") > 0;
         nextPage.IsEnabled = value.Number("offset") + 50 < value.Number("total");
         ApplyUpdateState(value.GetProperty("update"));
-        componentVersions.Text = $"ParseHub 组件 {value.String("parser_component_version", value.String("engine_version"))} · 执行环境 {value.String("runtime_version", value.String("engine_version"))}";
-        versionText.Text = $"客户端 {value.String("client_version")} · 解析组件 {value.String("engine_version")} · 运行环境 {value.String("runtime_version")}";
+        componentVersions.Text = $"组件 {value.String("parser_component_version", value.String("engine_version"))} · ParseHub {value.String("parser_version", "未知")}";
+        runtimeVersions.Text = $"环境 {value.String("runtime_version", value.String("engine_version"))} · {(value.String("environment_source") == "managed" ? "应用管理" : "随应用提供")}";
+        if (value.TryGetProperty("media_tools", out var tools)) {
+            static string ShortVersion(string version) { var parts = version.Split(' ', StringSplitOptions.RemoveEmptyEntries); return parts.Length > 2 && parts[1] == "version" ? parts[2] : version; }
+            ffmpegVersions.Text = $"FFmpeg {ShortVersion(tools.String("ffmpeg", "未知"))} · ffprobe {ShortVersion(tools.String("ffprobe", "未知"))} · 随环境提供";
+            ytdlpVersions.Text = $"{tools.String("yt-dlp", "版本未知")} · 随环境提供";
+        }
+        versionText.Text = $"应用包 {value.String("client_version")} · ParseHub 组件 {value.String("parser_component_version")} · 执行环境 {value.String("runtime_version")}";
         var clientVersion = value.String("client_version"); var devIndex = clientVersion.IndexOf(".dev", StringComparison.Ordinal);
         productVersion.Text = devIndex >= 0 ? $"版本 {clientVersion[..devIndex]} · 预览版 {clientVersion[(devIndex + 4)..]}" : $"版本 {clientVersion}";
         loadingSnapshot = false;

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "media-downloader-windows"
-version = "0.2.0.dev11"
+version = "0.2.0.dev12"
 description = "Windows desktop media downloader with an isolated ParseHub engine"
 requires-python = ">=3.12,<3.13"
 dependencies = ["PySide6-Essentials==6.8.3", "parsehub[cli]", "cryptography>=49", "packaging>=24"]

@@ -79,11 +79,12 @@ def verify_catalog(raw, signature, trust, *, now=None, installed=False):
         raise UpdateError("UPDATE_CATALOG", "组件更新目录格式或有效期无效。") from exc
 
 
-def choose(releases, engine, runtime_id):
+def choose(releases, engine, runtime_id, *, component="all"):
     candidates = [
         item
         for item in releases
-        if newer(item[0], engine)
+        if (component == "all" or item[0].get("component", "engine") == component)
+        and newer(item[0], engine)
         and (
             item[0].get("component", "engine") == "engine" or item[0].get("requires_runtime_id") == runtime_id
         )

@@ -23,7 +23,7 @@ def main():
     ]
     assert all((directory / name).is_file() for name in required)
     readme = (
-        "Media Downloader 0.2.0.dev11 - WinUI 3 原生界面预览版\n\n"
+        "Media Downloader 0.2.0.dev12 - WinUI 3 原生界面预览版\n\n"
         "请完整解压后运行 MediaDownloader/MediaDownloader.exe。无需单独安装 .NET。\n"
         "请先关闭旧客户端；新旧版本使用同一任务数据目录，不能同时运行。\n"
         "保留 backend、engine、Assets、PRI、XBF 和所有运行库文件。\n"
@@ -47,7 +47,7 @@ def main():
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     report = {
         "artifact": str(archive.relative_to(ROOT)),
-        "client": "0.2.0.dev11",
+        "client": "0.2.0.dev12",
         "engine": "0.1.0.localized-dev12",
         "sha256": digest,
         "zip_bytes": archive.stat().st_size,

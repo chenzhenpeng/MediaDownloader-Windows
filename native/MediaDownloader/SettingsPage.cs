@@ -21,6 +21,12 @@ public sealed partial class MainWindow
     private readonly ToggleSwitch updateAuto = new(), updateLock = new();
     private readonly TextBlock productVersion = new();
     private readonly TextBlock componentVersions = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock runtimeVersions = new() { TextWrapping = TextWrapping.Wrap }, runtimeMessage = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock ffmpegVersions = new() { TextWrapping = TextWrapping.Wrap }, ytdlpVersions = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly StackPanel runtimeActions = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
+    private readonly ProgressBar runtimeProgress = new() { Height = 3, IsIndeterminate = true, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+    private Button runtimeCheck = null!, runtimeInstall = null!, runtimeCancel = null!;
+    private Grid settingsRuntimeRow = null!;
     private readonly Expander updateAdvanced = new() { Header = "更新选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel updateActions = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     private Grid settingsThemeRow = null!, settingsAboutRow = null!;
@@ -39,7 +45,7 @@ public sealed partial class MainWindow
         control.HorizontalAlignment = HorizontalAlignment.Right; control.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(control, 2); row.Children.Add(control);
         var icon = new FontIcon { FontSize = 20, VerticalAlignment = VerticalAlignment.Center, Glyph = title switch {
-            "应用主题" => "\uE790", "保存位置" => "\uE8B7", "并发任务数" => "\uE8FD", "解析能力更新" => "\uE895", _ => "\uE946" } };
+            "应用主题" => "\uE790", "保存位置" => "\uE8B7", "并发任务数" => "\uE8FD", "ParseHub 解析组件" => "\uE895", "worker、Python 与依赖" => "\uE950", "FFmpeg / ffprobe" => "\uE714", "yt-dlp" => "\uE896", _ => "\uE946" } };
         row.Children.Add(icon); return row;
     }
 
@@ -117,15 +123,15 @@ public sealed partial class MainWindow
         }));
         connections.Children.Add(buttons); connectionSection.Content = connections;
         connectionGroup.Children.Add(connectionSection); body.Children.Add(connectionGroup);
-        var updates = SettingsGroup("更新");
+        var updates = SettingsGroup("解析组件");
         updateCheck = ActionButton("检查更新", async (_, _) => {
-            if (snapshot.GetProperty("update").Bool("configured")) await CallAsync("update", new { action = "check" });
+            if (snapshot.GetProperty("update").Bool("configured")) await CallAsync("update", new { action = "check", component = "parsehub" });
             else await CallAsync("official_update");
         });
-        updateInstall = ActionButton("安装解析更新", async (_, _) => await CallAsync("update", new { action = "install" }), true);
+        updateInstall = ActionButton("安装解析更新", async (_, _) => await CallAsync("update", new { action = "install", component = "parsehub" }), true);
         updateCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
         updateActions.Children.Add(updateCheck); updateActions.Children.Add(updateInstall); updateActions.Children.Add(updateCancel);
-        var coreRow = SettingRow("解析能力更新", "", updateActions); coreRow.MinHeight = 84; settingsUpdateRow = coreRow;
+        var coreRow = SettingRow("ParseHub 解析组件", "", updateActions); coreRow.MinHeight = 84; settingsUpdateRow = coreRow;
         updateMessage.Style = (Style)Application.Current.Resources["SecondaryText"]; updateMessage.FontSize = 12;
         var coreWords = (StackPanel)coreRow.Children[0]; coreWords.Children.RemoveAt(1); coreWords.Children.Add(updateMessage); coreWords.Children.Add(updateProgress);
         var updateBody = new StackPanel(); updateBody.Children.Add(coreRow);
@@ -134,19 +140,38 @@ public sealed partial class MainWindow
         var officialPage = new HyperlinkButton { Content = "查看 ParseHub 官方发布", Padding = new Thickness(0), FontSize = 12 };
         officialPage.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/z-mio/ParseHub/releases"));
         officialPage.Margin = new Thickness(64, 0, 16, 12); updateBody.Children.Add(officialPage);
+        updates.Children.Add(SettingsCard(updateBody)); body.Children.Add(updates);
+        var environment = SettingsGroup("执行环境");
+        runtimeCheck = ActionButton("检查环境更新", async (_, _) => await CallAsync("update", new { action = "check", component = "engine" }));
+        runtimeInstall = ActionButton("安装运行环境", async (_, _) => await CallAsync("update", new { action = "install", component = "engine" }), true);
+        runtimeCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
+        runtimeActions.Children.Add(runtimeCheck); runtimeActions.Children.Add(runtimeInstall); runtimeActions.Children.Add(runtimeCancel);
+        settingsRuntimeRow = SettingRow("worker、Python 与依赖", "", runtimeActions); settingsRuntimeRow.MinHeight = 84;
+        runtimeMessage.Style = (Style)Application.Current.Resources["SecondaryText"]; runtimeMessage.FontSize = 12;
+        var runtimeWords = (StackPanel)settingsRuntimeRow.Children[0]; runtimeWords.Children.RemoveAt(1); runtimeWords.Children.Add(runtimeMessage); runtimeWords.Children.Add(runtimeProgress);
+        var runtimeBody = new StackPanel(); runtimeBody.Children.Add(settingsRuntimeRow);
+        runtimeVersions.Style = (Style)Application.Current.Resources["SecondaryText"]; runtimeVersions.FontSize = 12; runtimeVersions.Margin = new Thickness(64, 0, 16, 12); runtimeBody.Children.Add(runtimeVersions);
+        environment.Children.Add(SettingsCard(runtimeBody)); body.Children.Add(environment);
+        var tools = SettingsGroup("媒体工具"); var toolRows = new StackPanel();
+        foreach (var (title, version, kind) in new[] { ("FFmpeg / ffprobe", ffmpegVersions, "ffmpeg"), ("yt-dlp", ytdlpVersions, "yt-dlp") }) {
+            var row = SettingRow(title, "", ActionButton("查看详情", async (_, _) => await ShowToolDetailsAsync(kind)));
+            version.Style = (Style)Application.Current.Resources["SecondaryText"]; version.FontSize = 12;
+            ((StackPanel)row.Children[0]).Children.RemoveAt(1); ((StackPanel)row.Children[0]).Children.Add(version); toolRows.Children.Add(row);
+        }
+        tools.Children.Add(SettingsCard(toolRows)); body.Children.Add(tools);
         var options = new StackPanel { Spacing = 0 };
         updateAuto.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "auto", value = updateAuto.IsOn }); };
         updateLock.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "lock", value = updateLock.IsOn }); };
-        updateRollback = ActionButton("回滚上一版本", async (_, _) => {
-            if (await ConfirmAsync("回滚内核", "等待当前任务结束后切换，任务记录与文件会保留。", "回滚内核")) await CallAsync("update", new { action = "rollback" });
+        updateRollback = ActionButton("恢复上一组合", async (_, _) => {
+            if (await ConfirmAsync("恢复上一组合", "解析组件与运行环境将一起恢复为兼容组合。等待当前任务结束后切换，任务与文件会保留。", "恢复上一组合")) await CallAsync("update", new { action = "rollback" });
         });
         options.Children.Add(SettingRow("自动检查", "每 24 小时检查，仅提示可用更新。", updateAuto));
-        options.Children.Add(SettingRow("锁定当前内核", "暂停安装与手动回滚。", updateLock));
-        options.Children.Add(SettingRow("恢复上一版本", "遇到新内核问题时使用。", updateRollback));
-        updateAdvanced.Header = ExpanderHeading("\uE713", "更新选项", "自动检查、版本锁定与回滚");
+        options.Children.Add(SettingRow("锁定当前组合", "暂停解析组件和运行环境的安装与手动恢复。", updateLock));
+        options.Children.Add(SettingRow("恢复上一组合", "一起恢复解析组件与配套环境，避免版本混用。", updateRollback));
+        updateAdvanced.Header = ExpanderHeading("\uE713", "组件维护", "自动检查、组合锁定与恢复");
         updateAdvanced.Content = options;
-        updates.Children.Add(SettingsCard(updateBody)); updates.Children.Add(updateAdvanced); body.Children.Add(updates);
-        var about = SettingsGroup("关于");
+        body.Children.Add(updateAdvanced);
+        var about = SettingsGroup("应用包");
         var aboutRow = SettingRow("Media Downloader", "", ActionButton("版本详情", async (_, _) => await ShowVersionsAsync()));
         settingsAboutRow = aboutRow;
         productVersion.Style = (Style)Application.Current.Resources["SecondaryText"]; productVersion.FontSize = 12;
@@ -174,28 +199,50 @@ public sealed partial class MainWindow
         RefreshConnection();
         var configured = state.Bool("configured");
         var official = state.GetProperty("official");
-        updateMessage.Text = configured ? state.String("message") : official.String("message");
-        updateCheck.Content = configured ? "检查组件更新" : "检查官方更新";
-        updateInstall.Content = state.String("component") == "parsehub" ? "安装解析组件" : "安装运行环境";
-        var status = state.String("status");
-        var cancellable = configured && (status is "checking" or "downloading" or "waiting");
-        var cancelling = state.Bool("cancel_requested");
-        updateCheck.Visibility = cancellable || status == "available" ? Visibility.Collapsed : Visibility.Visible;
-        updateCheck.IsEnabled = configured ? !state.Bool("busy") : official.String("status") != "checking";
-        updateInstall.Visibility = state.String("status") == "available" ? Visibility.Visible : Visibility.Collapsed;
-        updateInstall.IsEnabled = !state.Bool("locked");
-        updateCancel.Visibility = cancellable ? Visibility.Visible : Visibility.Collapsed;
-        updateCancel.Content = cancelling ? "正在取消…" : status == "checking" ? "取消检查" : status == "downloading" ? "取消下载" : "取消更新";
-        updateCancel.IsEnabled = !cancelling; updateActions.Visibility = Visibility.Visible;
-        var progress = state.TryGetProperty("downloaded_bytes", out var downloaded) && downloaded.TryGetInt64(out var done) ? done : 0;
-        var total = state.TryGetProperty("total_bytes", out var size) && size.TryGetInt64(out var count) ? count : 0;
-        updateProgress.Visibility = state.Bool("busy") || official.String("status") == "checking" ? Visibility.Visible : Visibility.Collapsed;
-        updateProgress.IsIndeterminate = status != "downloading" || total <= 0 || progress >= total;
-        updateProgress.Value = total > 0 ? Math.Clamp(100.0 * progress / total, 0, 100) : 0;
-        if (status == "downloading" && total > 0 && progress >= total && !cancelling) updateMessage.Text = "下载完成，正在校验与自检…";
+        var scope = state.String("scope", "all");
+        if (scope == "all") scope = state.String("component", "parsehub");
+        if (!configured) scope = "parsehub";
+        ApplyComponentCard(state, scope == "parsehub", true, updateCheck, updateInstall, updateCancel, updateMessage, updateProgress);
+        ApplyComponentCard(state, scope == "engine", false, runtimeCheck, runtimeInstall, runtimeCancel, runtimeMessage, runtimeProgress);
         updateAdvanced.Visibility = configured || state.Bool("can_rollback") || state.Bool("locked") ? Visibility.Visible : Visibility.Collapsed;
         updateAuto.IsEnabled = state.Bool("configured"); updateAuto.IsOn = state.Bool("auto"); updateLock.IsOn = state.Bool("locked");
         updateRollback.IsEnabled = state.Bool("can_rollback") && !state.Bool("busy") && !state.Bool("locked");
+    }
+
+    private static void ApplyComponentCard(JsonElement state, bool active, bool parser, Button check, Button install, Button cancel, TextBlock message, ProgressBar bar)
+    {
+        var configured = state.Bool("configured"); var official = state.GetProperty("official");
+        var status = active ? state.String("status") : "idle";
+        var cancelling = active && state.Bool("cancel_requested");
+        var cancellable = configured && active && status is ("checking" or "downloading" or "waiting");
+        message.Text = active ? configured ? state.String("message") : parser ? official.String("message") : "尚未配置运行环境更新源。"
+            : parser ? "独立更新平台解析与兼容适配代码。" : "完整管理 worker、Python 和配套依赖。";
+        check.Content = parser ? configured ? "检查解析更新" : "检查官方更新" : "检查环境更新";
+        install.Content = parser ? "安装解析组件" : "安装运行环境";
+        check.Visibility = cancellable || status == "available" ? Visibility.Collapsed : Visibility.Visible;
+        check.IsEnabled = !state.Bool("busy") && (configured || parser && official.String("status") != "checking");
+        install.Visibility = active && status == "available" ? Visibility.Visible : Visibility.Collapsed;
+        install.IsEnabled = !state.Bool("locked");
+        cancel.Visibility = cancellable ? Visibility.Visible : Visibility.Collapsed;
+        cancel.Content = cancelling ? "正在取消…" : status == "checking" ? "取消检查" : status == "downloading" ? "取消下载" : "取消更新";
+        cancel.IsEnabled = !cancelling;
+        var done = state.TryGetProperty("downloaded_bytes", out var downloaded) && downloaded.TryGetInt64(out var bytes) ? bytes : 0;
+        var total = state.TryGetProperty("total_bytes", out var size) && size.TryGetInt64(out var count) ? count : 0;
+        bar.Visibility = active && (state.Bool("busy") || parser && official.String("status") == "checking") ? Visibility.Visible : Visibility.Collapsed;
+        bar.IsIndeterminate = status != "downloading" || total <= 0 || done >= total;
+        bar.Value = total > 0 ? Math.Clamp(100.0 * done / total, 0, 100) : 0;
+        if (active && status == "downloading" && total > 0 && done >= total && !cancelling) message.Text = "下载完成，正在校验与自检…";
+    }
+
+    private async Task ShowToolDetailsAsync(string kind)
+    {
+        var text = "版本信息暂不可用。";
+        if (snapshot.TryGetProperty("media_tools", out var tools)) text = kind == "ffmpeg"
+            ? $"FFmpeg：{tools.String("ffmpeg", "未知")}\n\nffprobe：{tools.String("ffprobe", "未知")}\n\n来源：随当前执行环境提供，两个工具成对管理。"
+            : $"yt-dlp：{tools.String("yt-dlp", "未知")}\n\n来源：随当前执行环境提供。";
+        var dialog = new ContentDialog { XamlRoot = Root.XamlRoot, RequestedTheme = Root.ActualTheme, Title = kind == "ffmpeg" ? "FFmpeg / ffprobe" : "yt-dlp",
+            Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }, CloseButtonText = "关闭" };
+        await dialog.ShowAsync();
     }
 
     private async Task ShowVersionsAsync()

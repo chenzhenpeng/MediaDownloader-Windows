@@ -1,4 +1,4 @@
-﻿Media Downloader 0.2.0-preview.11
+﻿Media Downloader 0.2.0-preview.12
 
 这是 WinUI 3 原生界面的预览安装版，包含运行库和解析内核，无需单独安装 Python 或 .NET。
 

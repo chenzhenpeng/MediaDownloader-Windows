@@ -36,6 +36,7 @@ class UpdateManager(QObject):
         self.cancelled = threading.Event()
         self.closing = False
         self.progress = (0, 0)
+        self.target = "all"
         self._reported_progress = self.progress
         self.status = "idle" if engine_store.trust.configured else "unconfigured"
         self.message = engine_store.recovery_message or (
@@ -60,9 +61,13 @@ class UpdateManager(QObject):
         self.status, self.message = status, message
         self.changed.emit()
 
-    def check(self):
+    def check(self, component="all"):
+        if component not in {"all", "parsehub", "engine"}:
+            raise ValueError("Unknown update component")
         if self.busy or self.closing or not self.engines.trust.configured:
             return
+        self.target = component
+        self.manifest = None
         self.cancelled.clear()
         self.job = "check"
         self.service.store.set_setting("update_last_check", time.time())
@@ -73,11 +78,13 @@ class UpdateManager(QObject):
             raw, signature = self.feed.check(cancelled=self.cancelled.is_set)
             if self.engines.trust.catalog_url:
                 releases = self.engines.accept_catalog(raw, signature)
-                selected = choose(releases, current, current.runtime_id)
+                selected = choose(releases, current, current.runtime_id, component=component)
                 if selected is None:
                     return None
                 _, raw, signature = selected
             manifest = self.engines.accept(raw, signature)
+            if component != "all" and manifest.get("component", "engine") != component:
+                return None
             return manifest, raw, signature
 
         self.future = self.executor.submit(run)
@@ -184,7 +191,13 @@ class UpdateManager(QObject):
                 if self.job == "check":
                     if result is None:
                         self.manifest = None
-                        self._set("idle", "当前解析组件和运行环境已是兼容的最新版本。")
+                        self._set(
+                            "idle",
+                            {
+                                "parsehub": "没有兼容的更高版本解析组件。",
+                                "engine": "没有兼容的更高版本运行环境。",
+                            }.get(self.target, "当前解析组件和运行环境已是兼容的最新版本。"),
+                        )
                     else:
                         self.manifest, self.raw, self.signature = result
                         if newer(self.manifest, self.service.engine):

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    directory = ROOT / "review/native/states-preview11" / str(time.time_ns())
+    directory = ROOT / "review/native/states-preview12" / str(time.time_ns())
     directory.mkdir(parents=True)
     data = ROOT / ".local/native" / f"states-{time.time_ns()}"
     reports = []
@@ -38,7 +38,7 @@ def main():
                     command += ["--smoke-maximized", "true"]
                 subprocess.run(command, timeout=60, check=True)
                 value = json.loads(report.read_text(encoding="utf-8"))
-                assert value["backend"]["client_version"] == "0.2.0.dev11"
+                assert value["backend"]["client_version"] == "0.2.0.dev12"
                 assert all(value["layout"]["checks"].values())
                 reports.append(
                     {

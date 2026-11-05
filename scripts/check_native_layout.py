@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main():
     executable = ROOT / "dist/native/MediaDownloader/MediaDownloader.exe"
-    directory = ROOT / "review/native/layout-preview11"
+    directory = ROOT / "review/native/layout-preview12"
     directory.mkdir(parents=True, exist_ok=True)
     run_directory = directory / str(time.time_ns())
     run_directory.mkdir()
@@ -57,7 +57,7 @@ def main():
         if not output.exists():
             raise RuntimeError(f"No successful layout report: {mode}/{page}")
         report = json.loads(output.read_text(encoding="utf-8"))
-        assert report["backend"]["client_version"] == "0.2.0.dev11"
+        assert report["backend"]["client_version"] == "0.2.0.dev12"
         assert report["layout"]["checks"] and all(report["layout"]["checks"].values()), report["layout"]
         reports.append(
             {

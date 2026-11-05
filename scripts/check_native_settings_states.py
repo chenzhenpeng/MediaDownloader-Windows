@@ -3,33 +3,37 @@
 import json
 import subprocess
 import time
+from itertools import product
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    directory = ROOT / "review/native/settings-states-preview11" / str(time.time_ns())
+    directory = ROOT / "review/native/settings-states-preview12" / str(time.time_ns())
     directory.mkdir(parents=True)
     reports = []
     for wide in (False, True):
         for theme in ("light", "dark"):
-            for state in (
-                "checking",
-                "downloading",
-                "validating",
-                "waiting",
-                "available",
-                "cancelling",
-                "failed",
-                "unconfigured",
+            for component, state in product(
+                ("parsehub", "engine"),
+                (
+                    "checking",
+                    "downloading",
+                    "validating",
+                    "waiting",
+                    "available",
+                    "cancelling",
+                    "failed",
+                    "unconfigured",
+                ),
             ):
-                name = f"{'wide' if wide else 'narrow'}-{theme}-{state}"
+                name = f"{'wide' if wide else 'narrow'}-{theme}-{component}-{state}"
                 output = directory / f"{name}.json"
                 args = [
                     str(ROOT / "dist/native/MediaDownloader/MediaDownloader.exe"),
                     "--data-dir",
-                    str(ROOT / ".local/native/settings-states-preview11"),
+                    str(ROOT / ".local/native/settings-states-preview12"),
                     "--smoke-report",
                     str(output),
                     "--smoke-page",
@@ -40,6 +44,8 @@ def main():
                     theme,
                     "--smoke-update-state",
                     state,
+                    "--smoke-update-component",
+                    component,
                     "--smoke-notice-navigation",
                     "true",
                 ]
@@ -47,7 +53,7 @@ def main():
                     args += ["--smoke-maximized", "true"]
                 subprocess.run(args, timeout=60, check=True)
                 report = json.loads(output.read_text(encoding="utf-8"))
-                assert report["backend"]["client_version"] == "0.2.0.dev11"
+                assert report["backend"]["client_version"] == "0.2.0.dev12"
                 checks = report["layout"]["checks"]
                 assert checks and all(checks.values()), (name, checks)
                 reports.append({"case": name, "checks": checks})
