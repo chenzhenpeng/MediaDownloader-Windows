@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from .component_catalog import choose, newer
 from .update_contracts import UpdateError
 from .update_feed import UpdateFeed
 from .update_store import update_lock
@@ -35,6 +36,7 @@ class UpdateManager(QObject):
         self.cancelled = threading.Event()
         self.closing = False
         self.progress = (0, 0)
+        self._reported_progress = self.progress
         self.status = "idle" if engine_store.trust.configured else "unconfigured"
         self.message = engine_store.recovery_message or (
             "可手动检查受信任的内核更新。" if engine_store.trust.configured else "尚未配置受信任的更新源。"
@@ -65,9 +67,16 @@ class UpdateManager(QObject):
         self.job = "check"
         self.service.store.set_setting("update_last_check", time.time())
         self._set("checking", "正在检查签名更新清单…")
+        current = self.service.engine
 
         def run():
             raw, signature = self.feed.check(cancelled=self.cancelled.is_set)
+            if self.engines.trust.catalog_url:
+                releases = self.engines.accept_catalog(raw, signature)
+                selected = choose(releases, current, current.runtime_id)
+                if selected is None:
+                    return None
+                _, raw, signature = selected
             manifest = self.engines.accept(raw, signature)
             return manifest, raw, signature
 
@@ -78,6 +87,10 @@ class UpdateManager(QObject):
             return
         if self.service.store.setting("engine_update_locked", False):
             self._set("idle", "当前内核已锁定，请先取消版本锁定。")
+            return
+        if not newer(self.manifest, self.service.engine):
+            self.manifest = None
+            self._set("idle", "候选组件不高于当前版本，未执行降级。")
             return
         self.cancelled.clear()
         self.progress = (0, self.manifest["size_bytes"])
@@ -159,6 +172,9 @@ class UpdateManager(QObject):
     def _tick(self):
         if self.closing:
             return
+        if self.status == "downloading" and self.progress != self._reported_progress:
+            self._reported_progress = self.progress
+            self.changed.emit()
         if self.future and self.future.done():
             future, self.future = self.future, None
             try:
@@ -166,11 +182,16 @@ class UpdateManager(QObject):
                 if self.cancelled.is_set():
                     raise UpdateError("UPDATE_CANCELLED", "更新已取消，当前内核未更改。")
                 if self.job == "check":
-                    self.manifest, self.raw, self.signature = result
-                    if self.manifest["engine_version"] == self.service.engine.version:
-                        self._set("idle", "更新源中没有不同版本的兼容内核。")
+                    if result is None:
+                        self.manifest = None
+                        self._set("idle", "当前解析组件和运行环境已是兼容的最新版本。")
                     else:
-                        self._set("available", "发现经过签名验证的兼容内核，可选择安装。")
+                        self.manifest, self.raw, self.signature = result
+                        if newer(self.manifest, self.service.engine):
+                            self._set("available", "发现经过签名验证的兼容组件，可选择安装。")
+                        else:
+                            self.manifest = None
+                            self._set("idle", "没有更高版本的兼容组件，当前版本保持不变。")
                 else:
                     self.prepared = result
                     self.service.dispatch_paused = True
@@ -202,8 +223,6 @@ class UpdateManager(QObject):
                 self.service.switch_engine(engine)
             except Exception:
                 self._switch_failed("UPDATE_STATE")
-        if self.status == "downloading":
-            self.changed.emit()
         if (
             not self.busy
             and self.status in {"idle", "updated", "rolled_back"}

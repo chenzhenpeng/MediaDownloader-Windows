@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from media_downloader import ENGINE_VERSION, PROTOCOL, UPSTREAM_SHA, __version__  # noqa: E402
+from media_downloader.parser_runtime import runtime_id  # noqa: E402
 
 ARTIFACT_ROOT = ROOT / "dist" / "m0"
 
@@ -114,6 +115,9 @@ def main():
     parser.add_argument("--skip-engine", action="store_true")
     parser.add_argument("--skip-tools", action="store_true")
     parser.add_argument("--ffmpeg-dir", type=Path, default=Path(r"D:\Program Files\ffmpeg\bin"))
+    parser.add_argument(
+        "--ytdlp-exe", type=Path, help="Reviewed standalone yt-dlp, avoids a duplicate runtime"
+    )
     args = parser.parse_args()
     ARTIFACT_ROOT = ROOT / "dist" / args.milestone
     baseline_report()
@@ -130,7 +134,16 @@ def main():
     )
     yt_entry = entry_dir / "ytdlp_entry.py"
     yt_entry.write_text("from yt_dlp import main\nraise SystemExit(main())\n", encoding="utf-8")
-    if not args.skip_tools:
+    if args.ytdlp_exe:
+        lock = json.loads((ROOT / "packaging/media-tools-lock.json").read_text(encoding="utf-8"))
+        actual = hashlib.file_digest(args.ytdlp_exe.open("rb"), "sha256").hexdigest()
+        if actual != lock["yt-dlp"]["sha256"]:
+            raise ValueError("Standalone yt-dlp does not match the reviewed tool lock")
+        for name in ("ffmpeg", "ffprobe"):
+            actual = hashlib.file_digest((args.ffmpeg_dir / f"{name}.exe").open("rb"), "sha256").hexdigest()
+            if actual != lock["ffmpeg"][f"{name}_sha256"]:
+                raise ValueError(f"{name} does not match the reviewed slim tool lock")
+    elif not args.skip_tools:
         build("yt-dlp", yt_entry, ["--console", "--collect-all", "yt_dlp", "--exclude-module", "PySide6"])
     elif not (ARTIFACT_ROOT / "yt-dlp").exists():
         shutil.copytree(ROOT / "dist/m0/yt-dlp", ARTIFACT_ROOT / "yt-dlp")
@@ -156,6 +169,10 @@ def main():
                 "pytest",
                 "--exclude-module",
                 "tkinter",
+                "--exclude-module",
+                "cv2",
+                "--exclude-module",
+                "numpy",
             ],
         )
     if not args.skip_client:
@@ -196,7 +213,10 @@ def main():
         return
     tool_dir = engine_dir / "tools"
     tool_dir.mkdir(exist_ok=True)
-    shutil.copytree(ARTIFACT_ROOT / "yt-dlp", tool_dir, dirs_exist_ok=True)
+    if args.ytdlp_exe:
+        shutil.copy2(args.ytdlp_exe, tool_dir / "yt-dlp.exe")
+    else:
+        shutil.copytree(ARTIFACT_ROOT / "yt-dlp", tool_dir, dirs_exist_ok=True)
     tool_metadata = {}
     for name in ("ffmpeg", "ffprobe"):
         path = args.ffmpeg_dir / f"{name}.exe"
@@ -207,12 +227,18 @@ def main():
             "version": subprocess.check_output([str(path), "-version"], text=True).splitlines()[0],
             "sha256": hashlib.file_digest(path.open("rb"), "sha256").hexdigest(),
         }
+    for library in args.ffmpeg_dir.glob("*.dll"):
+        shutil.copy2(library, tool_dir / library.name)
     notices = engine_dir / "notices"
     notices.mkdir(exist_ok=True)
     shutil.copy2(ROOT / "upstream-ParseHub" / "LICENSE", notices / "ParseHub-LICENSE")
     shutil.copy2(args.ffmpeg_dir.parent / "LICENSE", notices / "FFmpeg-LICENSE")
     shutil.copy2(args.ffmpeg_dir.parent / "README.txt", notices / "FFmpeg-README.txt")
     descriptor = {
+        "runtime_id": runtime_id(ROOT / "uv.lock"),
+        "parser_adapter_abi": 1,
+        "parser_component_version": args.engine_version,
+        "parsehub_version": importlib.metadata.version("parsehub"),
         "protocol": PROTOCOL,
         "target": "windows-x86_64",
         "engine_version": args.engine_version,

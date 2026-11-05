@@ -1,0 +1,14 @@
+{
+  "ffmpeg": {
+    "version": "9.0.2-essentials_build",
+    "url": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.7z",
+    "sha256": "4705843ccaaf54257c16ad90f3e952ece33c17df964ecf7bfdbb0f49c7171077",
+    "ffmpeg_sha256": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec",
+    "ffprobe_sha256": "f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52"
+  },
+  "yt-dlp": {
+    "version": "2026.10.29.232701",
+    "url": "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/download/2026.10.29.232701/yt-dlp.exe",
+    "sha256": "738eb6db13e9f7887924c6857306999ff674ee4fa74cb38879ed8dacc1c137b6"
+  }
+}

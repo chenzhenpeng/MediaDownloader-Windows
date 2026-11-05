@@ -12,8 +12,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "0.2.0-preview.5"
-MSI_VERSION = "0.2.5"  # Third field is the monotonically increasing release sequence.
+RELEASE = "0.2.0-preview.11"
+MSI_VERSION = "0.2.9"  # Third field is the monotonically increasing release sequence.
 UPGRADE = uuid.UUID("8f5574cb-a715-4ba1-ad07-4212a70d460b")
 NS = "http://wixtoolset.org/schemas/v4/wxs"
 UI = "http://wixtoolset.org/schemas/v4/wxs/ui"
@@ -55,7 +55,7 @@ def main():
         Manufacturer="Media Downloader Project",
         Version=MSI_VERSION,
         Language="2052",
-        Scope="perUser",
+        Scope="perMachine",
         UpgradeCode=str(upgrade),
         ProductCode=str(product),
     )
@@ -68,6 +68,31 @@ def main():
     element(package, "MajorUpgrade", DowngradeErrorMessage="已安装更新版本，不能降级安装。")
     element(package, "MediaTemplate", EmbedCab="yes", CompressionLevel="high")
     element(package, "Launch", Condition="Installed OR VersionNT64", Message="此安装包需要 64 位 Windows。")
+    if not args.qa:
+        # Windows Installer cannot major-upgrade between per-user and
+        # per-machine contexts. Detect earlier previews before copying files.
+        for sequence in (5, 6):
+            previous = str(uuid.uuid5(UPGRADE, f"0.2.{sequence}")).upper()
+            prop = f"OLD_PER_USER_{sequence}"
+            search = element(package, "Property", Id=prop, Secure="yes")
+            element(
+                search,
+                "RegistrySearch",
+                Id=f"FindOldPerUser{sequence}",
+                Root="HKCU",
+                Bitness="always64",
+                Key=rf"Software\Microsoft\Windows\CurrentVersion\Uninstall\{{{previous}}}",
+                Name="DisplayName",
+                Type="raw",
+            )
+            element(
+                package,
+                "Launch",
+                Condition=f"Installed OR NOT {prop}",
+                Message=(
+                    "请先在 Windows 设置中卸载旧版当前用户安装包，再安装新版。任务、Cookie 和下载文件会保留。"
+                ),
+            )
     if not args.qa:
         legacy = element(package, "Property", Id="LEGACY_INNO", Secure="yes")
         element(
@@ -94,7 +119,7 @@ def main():
         remembered,
         "RegistrySearch",
         Id="FindInstalledRoot",
-        Root="HKCU",
+        Root="HKLM",
         Bitness="always64",
         Key=app_key + r"\Installer",
         Name="InstallRoot",
@@ -102,8 +127,7 @@ def main():
     )
     element(package, "Icon", Id="ProductIcon", SourceFile=str(payload / "Assets/AppIcon.ico"))
     element(package, "Property", Id="ARPPRODUCTICON", Value="ProductIcon")
-    local = element(package, "StandardDirectory", Id="LocalAppDataFolder")
-    programs = element(local, "Directory", Id="UserPrograms", Name="Programs")
+    programs = element(package, "StandardDirectory", Id="ProgramFiles64Folder")
     install = element(
         programs,
         "Directory",
@@ -118,13 +142,13 @@ def main():
         install,
         "Component",
         Id="RememberInstallRoot",
-        Guid=str(uuid.uuid5(upgrade, "install-root")),
+        Guid=str(uuid.uuid5(upgrade, "install-root-machine")),
         Bitness="always64",
     )
     element(
         root_component,
         "RegistryValue",
-        Root="HKCU",
+        Root="HKLM",
         Key=app_key + r"\Installer",
         Name="InstallRoot",
         Type="string",
@@ -159,7 +183,7 @@ def main():
         element(
             component,
             "RegistryValue",
-            Root="HKCU",
+            Root="HKLM",
             Key=app_key + r"\Installer\Files",
             Name=component_id,
             Type="string",
@@ -191,7 +215,7 @@ def main():
         element(
             component,
             "RegistryValue",
-            Root="HKCU",
+            Root="HKLM",
             Key=app_key + r"\Installer\Directories",
             Name=component_id,
             Value=RELEASE,
@@ -259,6 +283,7 @@ def main():
         "sha256": digest(target),
         "files": len(files),
         "qa": args.qa,
+        "scope": "perMachine",
         "signed": False,
     }
     (output / "msi-release.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

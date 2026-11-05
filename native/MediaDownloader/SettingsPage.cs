@@ -20,21 +20,27 @@ public sealed partial class MainWindow
     private readonly Expander connectionSection = new() { Header = "平台连接", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly ToggleSwitch updateAuto = new(), updateLock = new();
     private readonly TextBlock productVersion = new();
+    private readonly TextBlock componentVersions = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Expander updateAdvanced = new() { Header = "更新选项", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly StackPanel updateActions = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     private Grid settingsThemeRow = null!, settingsAboutRow = null!;
+    private Grid settingsUpdateRow = null!, connectionHeader = null!;
+    private readonly ProgressBar updateProgress = new() { Height = 3, IsIndeterminate = true, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
     private Button updateCheck = null!, updateInstall = null!, updateCancel = null!, updateRollback = null!;
 
     private static Grid SettingRow(string title, string description, FrameworkElement control)
     {
         var row = new Grid { ColumnSpacing = 24, Padding = new Thickness(16, 12, 16, 12), MinHeight = 64 };
-        row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
         var words = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(Text(title));
         var detail = Text(description, "SecondaryText"); detail.FontSize = 12;
-        words.Children.Add(detail); row.Children.Add(words);
+        words.Children.Add(detail); Grid.SetColumn(words, 1); row.Children.Add(words);
         control.HorizontalAlignment = HorizontalAlignment.Right; control.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(control, 1); row.Children.Add(control); return row;
+        Grid.SetColumn(control, 2); row.Children.Add(control);
+        var icon = new FontIcon { FontSize = 20, VerticalAlignment = VerticalAlignment.Center, Glyph = title switch {
+            "应用主题" => "\uE790", "保存位置" => "\uE8B7", "并发任务数" => "\uE8FD", "解析能力更新" => "\uE895", _ => "\uE946" } };
+        row.Children.Add(icon); return row;
     }
 
     private static Border SettingsCard(UIElement content) => new() { Style = (Style)Application.Current.Resources["SurfaceCard"], Padding = new Thickness(0), Child = content };
@@ -44,10 +50,19 @@ public sealed partial class MainWindow
         var heading = Text(title); heading.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         group.Children.Add(heading); return group;
     }
+    private static Grid ExpanderHeading(string glyph, string title, string description) {
+        var heading = new Grid { ColumnSpacing = 24, MinHeight = 36 };
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); heading.ColumnDefinitions.Add(new ColumnDefinition());
+        heading.Children.Add(new FontIcon { Glyph = glyph, FontSize = 20, VerticalAlignment = VerticalAlignment.Center });
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(Text(title));
+        var caption = Text(description, "SecondaryText"); caption.FontSize = 12; caption.LineHeight = 16; words.Children.Add(caption);
+        Grid.SetColumn(words, 1); heading.Children.Add(words); return heading;
+    }
 
     private void BuildSettings()
     {
-        var body = new StackPanel { Spacing = 20, MaxWidth = 1040, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var body = new StackPanel { Spacing = 20, HorizontalAlignment = HorizontalAlignment.Stretch };
         body.Children.Add(PageHeader("设置", "调整外观、保存位置与平台连接。"));
         foreach (var text in new[] { "跟随系统", "浅色", "深色" }) themePicker.Items.Add(text);
         AutomationProperties.SetName(themePicker, "应用主题");
@@ -71,7 +86,8 @@ public sealed partial class MainWindow
         downloads.Children.Add(SettingRow("并发任务数", "下次启动应用时生效。", workerCount));
         downloadGroup.Children.Add(SettingsCard(downloads)); body.Children.Add(downloadGroup);
         var connectionGroup = SettingsGroup("平台连接");
-        connectionSection.Header = "登录凭据与代理";
+        connectionHeader = ExpanderHeading("\uE774", "登录凭据与代理", "按平台管理 Cookie 与连接方式");
+        connectionSection.Header = connectionHeader;
         var connections = new StackPanel { Spacing = 16, Padding = new Thickness(16) };
         platformPicker.SelectionChanged += async (_, _) => { cookieInput.Password = ""; proxyInput.Text = ""; RefreshConnection(); await LoadSavedCookieAsync(); };
         cookieInput.PasswordChanged += (_, _) => credentialReadRevision++;
@@ -106,16 +122,18 @@ public sealed partial class MainWindow
             if (snapshot.GetProperty("update").Bool("configured")) await CallAsync("update", new { action = "check" });
             else await CallAsync("official_update");
         });
-        var coreRow = SettingRow("解析内核", "", updateCheck);
+        updateInstall = ActionButton("安装解析更新", async (_, _) => await CallAsync("update", new { action = "install" }), true);
+        updateCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
+        updateActions.Children.Add(updateCheck); updateActions.Children.Add(updateInstall); updateActions.Children.Add(updateCancel);
+        var coreRow = SettingRow("解析能力更新", "", updateActions); coreRow.MinHeight = 84; settingsUpdateRow = coreRow;
         updateMessage.Style = (Style)Application.Current.Resources["SecondaryText"]; updateMessage.FontSize = 12;
-        ((StackPanel)coreRow.Children[0]).Children.RemoveAt(1); ((StackPanel)coreRow.Children[0]).Children.Add(updateMessage);
-        updates.Children.Add(SettingsCard(coreRow));
+        var coreWords = (StackPanel)coreRow.Children[0]; coreWords.Children.RemoveAt(1); coreWords.Children.Add(updateMessage); coreWords.Children.Add(updateProgress);
+        var updateBody = new StackPanel(); updateBody.Children.Add(coreRow);
+        componentVersions.Style = (Style)Application.Current.Resources["SecondaryText"]; componentVersions.FontSize = 12; componentVersions.Margin = new Thickness(64, 0, 16, 8);
+        updateBody.Children.Add(componentVersions);
         var officialPage = new HyperlinkButton { Content = "查看 ParseHub 官方发布", Padding = new Thickness(0), FontSize = 12 };
         officialPage.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/z-mio/ParseHub/releases"));
-        updates.Children.Add(officialPage);
-        updateInstall = ActionButton("安装内核更新", async (_, _) => await CallAsync("update", new { action = "install" }), true);
-        updateCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
-        updateActions.Children.Add(updateInstall); updateActions.Children.Add(updateCancel); updates.Children.Add(updateActions);
+        officialPage.Margin = new Thickness(64, 0, 16, 12); updateBody.Children.Add(officialPage);
         var options = new StackPanel { Spacing = 0 };
         updateAuto.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "auto", value = updateAuto.IsOn }); };
         updateLock.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "lock", value = updateLock.IsOn }); };
@@ -125,14 +143,16 @@ public sealed partial class MainWindow
         options.Children.Add(SettingRow("自动检查", "每 24 小时检查，仅提示可用更新。", updateAuto));
         options.Children.Add(SettingRow("锁定当前内核", "暂停安装与手动回滚。", updateLock));
         options.Children.Add(SettingRow("恢复上一版本", "遇到新内核问题时使用。", updateRollback));
-        updateAdvanced.Content = options; updates.Children.Add(updateAdvanced); body.Children.Add(updates);
+        updateAdvanced.Header = ExpanderHeading("\uE713", "更新选项", "自动检查、版本锁定与回滚");
+        updateAdvanced.Content = options;
+        updates.Children.Add(SettingsCard(updateBody)); updates.Children.Add(updateAdvanced); body.Children.Add(updates);
         var about = SettingsGroup("关于");
         var aboutRow = SettingRow("Media Downloader", "", ActionButton("版本详情", async (_, _) => await ShowVersionsAsync()));
         settingsAboutRow = aboutRow;
         productVersion.Style = (Style)Application.Current.Resources["SecondaryText"]; productVersion.FontSize = 12;
         ((StackPanel)aboutRow.Children[0]).Children.RemoveAt(1); ((StackPanel)aboutRow.Children[0]).Children.Add(productVersion);
         about.Children.Add(SettingsCard(aboutRow)); body.Children.Add(about);
-        settingsPage.Children.Add(Scroller(body));
+        settingsPage.Children.Add(Scroller(body, double.PositiveInfinity));
     }
 
     private async Task LoadSavedCookieAsync()
@@ -155,13 +175,24 @@ public sealed partial class MainWindow
         var configured = state.Bool("configured");
         var official = state.GetProperty("official");
         updateMessage.Text = configured ? state.String("message") : official.String("message");
-        updateCheck.Content = configured ? "检查内核更新" : "检查官方更新";
-        updateCheck.Visibility = Visibility.Visible;
+        updateCheck.Content = configured ? "检查组件更新" : "检查官方更新";
+        updateInstall.Content = state.String("component") == "parsehub" ? "安装解析组件" : "安装运行环境";
+        var status = state.String("status");
+        var cancellable = configured && (status is "checking" or "downloading" or "waiting");
+        var cancelling = state.Bool("cancel_requested");
+        updateCheck.Visibility = cancellable || status == "available" ? Visibility.Collapsed : Visibility.Visible;
         updateCheck.IsEnabled = configured ? !state.Bool("busy") : official.String("status") != "checking";
         updateInstall.Visibility = state.String("status") == "available" ? Visibility.Visible : Visibility.Collapsed;
         updateInstall.IsEnabled = !state.Bool("locked");
-        updateCancel.Visibility = state.String("status") is "checking" or "downloading" or "waiting" ? Visibility.Visible : Visibility.Collapsed;
-        updateActions.Visibility = updateInstall.Visibility == Visibility.Visible || updateCancel.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        updateCancel.Visibility = cancellable ? Visibility.Visible : Visibility.Collapsed;
+        updateCancel.Content = cancelling ? "正在取消…" : status == "checking" ? "取消检查" : status == "downloading" ? "取消下载" : "取消更新";
+        updateCancel.IsEnabled = !cancelling; updateActions.Visibility = Visibility.Visible;
+        var progress = state.TryGetProperty("downloaded_bytes", out var downloaded) && downloaded.TryGetInt64(out var done) ? done : 0;
+        var total = state.TryGetProperty("total_bytes", out var size) && size.TryGetInt64(out var count) ? count : 0;
+        updateProgress.Visibility = state.Bool("busy") || official.String("status") == "checking" ? Visibility.Visible : Visibility.Collapsed;
+        updateProgress.IsIndeterminate = status != "downloading" || total <= 0 || progress >= total;
+        updateProgress.Value = total > 0 ? Math.Clamp(100.0 * progress / total, 0, 100) : 0;
+        if (status == "downloading" && total > 0 && progress >= total && !cancelling) updateMessage.Text = "下载完成，正在校验与自检…";
         updateAdvanced.Visibility = configured || state.Bool("can_rollback") || state.Bool("locked") ? Visibility.Visible : Visibility.Collapsed;
         updateAuto.IsEnabled = state.Bool("configured"); updateAuto.IsOn = state.Bool("auto"); updateLock.IsOn = state.Bool("locked");
         updateRollback.IsEnabled = state.Bool("can_rollback") && !state.Bool("busy") && !state.Bool("locked");

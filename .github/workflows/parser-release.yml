@@ -1,0 +1,91 @@
+name: Build and sign ParseHub-only component draft
+on:
+  workflow_dispatch:
+    inputs:
+      component_version:
+        description: Immutable parser component version
+        type: string
+        required: true
+      runtime_version:
+        description: Existing signed compatible runtime release
+        type: string
+        default: '0.1.5'
+        required: true
+      sequence:
+        description: Greater than the current published manifest sequence
+        type: number
+        required: true
+env:
+  PYTHONUTF8: '1'
+permissions:
+  contents: read
+concurrency:
+  group: engine-release
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short -k "not test_ui_keyboard_themes_and_responsive_layout"
+      - name: Fetch signed compatible runtime for actual candidate probes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
+        run: |
+          gh release download "engine-$env:RUNTIME_VERSION" --pattern release.json --pattern release.sig --pattern engine.zip --dir build/runtime-feed
+          if ($LASTEXITCODE -ne 0) { throw 'Compatible runtime download failed' }
+      - name: Build only ParseHub sources and verify runtime contract
+        env:
+          COMPONENT_VERSION: ${{ inputs.component_version }}
+        run: uv run --no-sync python scripts/build_parser_bundle.py --version $env:COMPONENT_VERSION --output build/parser-payload --runtime-manifest build/runtime-feed/release.json --runtime-signature build/runtime-feed/release.sig
+      - run: uv run --no-sync python scripts/check_parser_component.py build/parser-payload --runtime-feed build/runtime-feed --output build/parser-probe
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: reviewed-parser-component
+          path: build/parser-payload
+          retention-days: 7
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: parser-probe-evidence
+          path: build/parser-probe/report.json
+  sign-draft:
+    needs: build
+    runs-on: windows-latest
+    environment: engine-release
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: reviewed-parser-component
+          path: build/parser-payload
+      - name: Sign reviewed parser-only artifact
+        env:
+          ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
+          ENGINE_KEY_ID: ${{ vars.ENGINE_KEY_ID }}
+          COMPONENT_VERSION: ${{ inputs.component_version }}
+          RELEASE_SEQUENCE: ${{ inputs.sequence }}
+        run: |
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/engine-$env:COMPONENT_VERSION/engine.zip"
+          uv run --no-sync python scripts/release_engine.py build/parser-payload --output build/signed-parser --key-id $env:ENGINE_KEY_ID --sequence $env:RELEASE_SEQUENCE --artifact-url $url --channel stable
+      - name: Create a draft; publication follows acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPONENT_VERSION: ${{ inputs.component_version }}
+        run: gh release create "engine-$env:COMPONENT_VERSION" build/signed-parser/engine.zip build/signed-parser/release.json build/signed-parser/release.sig --target $env:GITHUB_SHA --draft --title "ParseHub component $env:COMPONENT_VERSION" --notes "ParseHub sources only; unchanged compatible runtime required. Verify frozen client installation and rollback before publishing."

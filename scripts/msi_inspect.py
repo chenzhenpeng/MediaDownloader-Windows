@@ -95,6 +95,7 @@ def inspect(path):
             "template": template,
             "product_code": properties["ProductCode"],
             "product_version": properties["ProductVersion"],
+            "all_users": properties.get("ALLUSERS", ""),
             "components_x64": len(attributes),
             "native_actions": actions,
         }

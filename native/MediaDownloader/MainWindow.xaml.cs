@@ -14,23 +14,28 @@ public sealed partial class MainWindow : Window
 {
     private BackendBridge? backend;
     private readonly Dictionary<string, TaskItem> models = new();
-    private readonly ObservableCollection<TaskItem> visibleTasks = new(), readyTasks = new(), recentTasks = new();
+    private readonly ObservableCollection<TaskItem> visibleTasks = new(), parsingResults = new();
     private readonly Grid homePage = new(), taskPage = new(), settingsPage = new();
     private JsonElement snapshot;
     private bool initialized, loadingSnapshot, allowClose;
     private string currentPage = "home";
     private readonly DispatcherTimer searchTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer noticeTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private IconElement? paneToggleIcon;
+    private string[] navigationToggleVisuals = [];
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
 
     public MainWindow()
     {
         InitializeComponent(); Root.Language = "zh-CN";
+        Nav.Loaded += (_, _) => AlignNavigationIcons();
+        noticeTimer.Tick += (_, _) => { noticeTimer.Stop(); GlobalNotice.IsOpen = false; };
         ExtendsContentIntoTitleBar = true; SetTitleBar(AppTitleBar);
         Root.ActualThemeChanged += (_, _) => ApplyCaptionTheme();
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Primary).WorkArea;
-        var initialWidth = int.TryParse(App.Option("--smoke-width"), out var requestedWidth) ? Math.Clamp(requestedWidth, 760, 2400) : 1180;
+        var initialWidth = int.TryParse(App.Option("--smoke-width"), out var requestedWidth) ? Math.Clamp(requestedWidth, 760, 2400) : 1280;
         AppWindow.Resize(new SizeInt32(Math.Min((int)(initialWidth * scale), area.Width - 40), Math.Min((int)(800 * scale), area.Height - 40)));
         if (App.Option("--smoke-maximized") == "true" && AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter) presenter.Maximize();
         BuildHome(); BuildTasks(); BuildSettings();
@@ -62,6 +67,7 @@ public sealed partial class MainWindow : Window
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         if (!initialized) return;
+        noticeTimer.Stop(); GlobalNotice.IsOpen = false;
         currentPage = args.IsSettingsSelected ? "settings" : (args.SelectedItemContainer?.Tag as string ?? "home");
         homePage.Visibility = currentPage == "home" ? Visibility.Visible : Visibility.Collapsed;
         taskPage.Visibility = currentPage == "downloads" ? Visibility.Visible : Visibility.Collapsed;
@@ -83,6 +89,7 @@ public sealed partial class MainWindow : Window
 
     private void ApplySnapshot(JsonElement value)
     {
+        if (capturing && (App.Option("--smoke-parse-state") is ("ready" or "parsing" or "failed" or "download-transition") || App.Option("--smoke-update-state") is not null)) return;
         snapshot = value; loadingSnapshot = true;
         var ids = new HashSet<string>();
         TaskItem Model(JsonElement data) {
@@ -91,16 +98,19 @@ public sealed partial class MainWindow : Window
             model.Update(data); return model;
         }
         Sync(visibleTasks, value.GetProperty("tasks").EnumerateArray().Select(Model).ToList());
-        Sync(readyTasks, value.GetProperty("ready").EnumerateArray().Select(Model).ToList());
-        Sync(recentTasks, value.GetProperty("recent").EnumerateArray().Select(Model).ToList());
+        foreach (var entry in value.GetProperty("ready").EnumerateArray()) Model(entry);
+        foreach (var entry in value.GetProperty("recent").EnumerateArray()) Model(entry);
         if (value.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.Object) Model(detail);
         if (value.TryGetProperty("submitted", out var submitted)) {
             var added = submitted.EnumerateArray().Select(Model).ToList();
+            RefreshParsing(added);
             var pending = added.Where(t => pendingInspections.Contains(t.Id)).ToList();
             if (pending.Count > 0 && pending.All(t => t.State is "ready" or "failed" or "cancelled" or "interrupted" or "completed")) {
                 var failed = pending.FirstOrDefault(t => t.State == "failed");
-                if (failed is not null) ShowError(failed.Error.Length > 0 ? failed.Error : "作品解析失败，请在下载管理中查看详情。");
-                else ShowInfo("作品已准备好，请确认预览后开始下载。");
+                if (currentPage == "home") {
+                    if (failed is not null) ShowError(failed.Error.Length > 0 ? failed.Error : "作品解析失败，请在下载管理中查看详情。");
+                    else ShowInfo("作品已准备好，请确认预览后开始下载。");
+                }
                 pendingInspections.Clear();
             }
         }
@@ -122,14 +132,13 @@ public sealed partial class MainWindow : Window
         taskList.Visibility = visibleTasks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         taskEmptyTitle.Text = taskSearch.Text.Length > 0 ? "没有匹配的任务" : SelectedTaskState switch {
             "active" => "暂无进行中的任务", "completed" => "还没有完成的下载", "failed" => "暂无失败任务", _ => "还没有下载记录" };
-        readySection.Visibility = readyTasks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        recentEmpty.Visibility = recentTasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         platformLink.Content = $"支持 {value.GetProperty("platforms").GetArrayLength()} 个平台";
         pager.Visibility = value.Number("total") > 50 ? Visibility.Visible : Visibility.Collapsed;
         previousPage.IsEnabled = value.Number("offset") > 0;
         nextPage.IsEnabled = value.Number("offset") + 50 < value.Number("total");
         ApplyUpdateState(value.GetProperty("update"));
-        versionText.Text = $"客户端 {value.String("client_version")} · 内核 {value.String("engine_version")}";
+        componentVersions.Text = $"ParseHub 组件 {value.String("parser_component_version", value.String("engine_version"))} · 执行环境 {value.String("runtime_version", value.String("engine_version"))}";
+        versionText.Text = $"客户端 {value.String("client_version")} · 解析组件 {value.String("engine_version")} · 运行环境 {value.String("runtime_version")}";
         var clientVersion = value.String("client_version"); var devIndex = clientVersion.IndexOf(".dev", StringComparison.Ordinal);
         productVersion.Text = devIndex >= 0 ? $"版本 {clientVersion[..devIndex]} · 预览版 {clientVersion[(devIndex + 4)..]}" : $"版本 {clientVersion}";
         loadingSnapshot = false;
@@ -151,8 +160,25 @@ public sealed partial class MainWindow : Window
         try { return await backend.CallAsync(method, args); }
         catch (Exception e) { ShowError(e.Message); return null; }
     }
-    private void ShowError(string text) { GlobalNotice.Title = "操作未完成"; GlobalNotice.Message = text; GlobalNotice.Severity = InfoBarSeverity.Error; GlobalNotice.IsOpen = true; }
-    private void ShowInfo(string text) { GlobalNotice.Title = ""; GlobalNotice.Message = text; GlobalNotice.Severity = InfoBarSeverity.Informational; GlobalNotice.IsOpen = true; }
+    private void ShowError(string text) { noticeTimer.Stop(); GlobalNotice.Title = "操作未完成"; GlobalNotice.Message = text; GlobalNotice.Severity = InfoBarSeverity.Error; GlobalNotice.IsOpen = true; }
+    private void ShowInfo(string text) { GlobalNotice.Title = ""; GlobalNotice.Message = text; GlobalNotice.Severity = InfoBarSeverity.Informational; GlobalNotice.IsOpen = true; noticeTimer.Stop(); noticeTimer.Start(); }
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root) {
+        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(root); i++) {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(root, i); yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+    private void AlignNavigationIcons() {
+        if (Nav.SettingsItem is NavigationViewItem settings) settings.Icon = new FontIcon { Glyph = "\uE713", Style = (Style)Application.Current.Resources["NavigationIcon"] };
+        var toggle = Descendants(Nav).OfType<Button>().FirstOrDefault(button => button.Name == "TogglePaneButton");
+        if (toggle is null) return;
+        toggle.ApplyTemplate();
+        navigationToggleVisuals = Descendants(toggle).Select(child => child.GetType().Name + ":" + (child as FrameworkElement)?.Name).ToArray();
+        foreach (var icon in Descendants(toggle).OfType<IconElement>()) {
+            if (icon is FontIcon font) { font.FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["SymbolThemeFontFamily"]; font.FontSize = 20; } icon.Width = 20; icon.Height = 20;
+            paneToggleIcon = icon;
+        }
+    }
     private void ApplyCaptionTheme()
     {
         var dark = Root.ActualTheme == ElementTheme.Dark;
@@ -202,7 +228,7 @@ public sealed partial class MainWindow : Window
         return viewer;
     }
     private StackPanel PageHeader(string title, string subtitle) {
-        var panel = new StackPanel { Spacing = 8 }; panel.Children.Add(Text(title, "TitleTextBlockStyle")); panel.Children.Add(Text(subtitle, "SecondaryText")); return panel;
+        var panel = new StackPanel { Spacing = 6 }; panel.Children.Add(Text(title, "PageTitle")); panel.Children.Add(Text(subtitle, "SecondaryText")); return panel;
     }
     private void GoHome() { Nav.SelectedItem = Nav.MenuItems[0]; }
     private string SelectedTaskState => taskFilter.SelectedItem?.Tag as string ?? "";

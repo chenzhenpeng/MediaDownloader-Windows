@@ -1,10 +1,13 @@
 """媒体文件信息读取"""
 
 import math
+import json
+import os
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
 from PIL import Image
 
 _IMAGE_SUFFIXES = frozenset(
@@ -92,16 +95,30 @@ class MediaInfoReader:
     @staticmethod
     def read_video(path: str | Path) -> MediaInfo:
         """读取视频宽高和时长（只读容器元数据，不解码帧）"""
-        cap = cv2.VideoCapture(str(path))
-        try:
-            if not cap.isOpened():
-                raise ValueError(f"无法打开视频文件: {path}")
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            duration = math.ceil(frame_count / fps) if fps > 0 else 0
-            return MediaInfo(width=width, height=height, duration=duration)
-        finally:
-            cap.release()
+        program = shutil.which("ffprobe")
+        if not program:
+            raise FileNotFoundError("找不到 ffprobe 媒体信息工具")
+        result = subprocess.run(
+            [program, "-v", "error", "-select_streams", "v:0", "-show_entries",
+             "stream=width,height,duration:format=duration", "-of", "json", str(Path(path).resolve())],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            creationflags=0x08000000 if os.name == "nt" else 0,
+            check=True,
+        )
+        data = json.loads(result.stdout)
+        streams = data.get("streams") or []
+        if not streams:
+            raise ValueError("媒体文件中没有可读取的视频流")
+        video = streams[0]
+        duration = 0.0
+        for value in (video.get("duration"), (data.get("format") or {}).get("duration")):
+            try:
+                seconds = float(value)
+                if math.isfinite(seconds) and seconds > duration:
+                    duration = seconds
+            except (ValueError, TypeError):
+                pass
+        return MediaInfo(width=int(video.get("width") or 0), height=int(video.get("height") or 0), duration=math.ceil(duration))
 

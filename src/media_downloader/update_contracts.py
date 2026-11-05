@@ -48,10 +48,21 @@ class Trust:
     manifest_url: str = ""
     signature_url: str = ""
     local_feed: Path | None = None
+    catalog_url: str = ""
+    catalog_signature_url: str = ""
 
     @property
     def configured(self):
-        return bool(self.keys and (self.local_feed or self.manifest_url and self.signature_url))
+        return bool(
+            self.keys
+            and (
+                self.local_feed
+                or self.manifest_url
+                and self.signature_url
+                or self.catalog_url
+                and self.catalog_signature_url
+            )
+        )
 
     def check_url(self, value):
         try:
@@ -96,10 +107,12 @@ def load_trust(path: Path, *, allow_local=False) -> Trust:
             data.get("manifest_url") or "",
             data.get("signature_url") or "",
             (path.parent / local).resolve() if local else None,
+            data.get("catalog_url") or "",
+            data.get("catalog_signature_url") or "",
         )
         if trust.configured and not local:
-            trust.check_url(trust.manifest_url)
-            trust.check_url(trust.signature_url)
+            trust.check_url(trust.catalog_url or trust.manifest_url)
+            trust.check_url(trust.catalog_signature_url or trust.signature_url)
         return trust
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise UpdateError("UPDATE_CONFIG", "更新源配置无效，当前内核仍可使用。") from exc
@@ -125,6 +138,12 @@ def verify_manifest(raw: bytes, signature: bytes, trust: Trust, *, installed=Fal
             raise ValueError("Key/channel mismatch")
         if data["target"] != "windows-x86_64" or data["protocol_version"] != PROTOCOL:
             fail("UPDATE_INCOMPATIBLE", "此内核需要其他架构或更新版本的客户端。")
+        if data.get("component", "engine") not in {"engine", "parsehub"}:
+            fail("UPDATE_INCOMPATIBLE", "客户端暂不支持此更新组件。")
+        if data.get("component") == "parsehub" and not re.fullmatch(
+            r"rt1-[0-9a-f]{24}", data.get("requires_runtime_id", "")
+        ):
+            raise ValueError("Missing parser runtime contract")
         if (
             not Version(data["app_min_version"])
             <= Version(__version__)

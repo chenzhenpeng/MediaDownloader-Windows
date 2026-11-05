@@ -16,22 +16,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    package = ROOT / "build/msi-qa/MediaDownloader-0.2.0-preview.5-win-x64-QA.msi"
+    package = ROOT / "build/msi-qa/MediaDownloader-0.2.0-preview.11-win-x64-QA.msi"
     metadata = inspect(package)
+    assert metadata["all_users"] == "1", "Protected-drive installs must use the elevated installer service"
     qa = ROOT / ".local/msi-qa" / str(time.time_ns())
     destination, data = qa / "程序目录", qa / "state"
     qa.mkdir(parents=True)
     installer = Path(os.environ["SystemRoot"]) / "System32/msiexec.exe"
-    executable = destination / "versions/0.2.0-preview.5/MediaDownloader.exe"
+    executable = destination / "versions/0.2.0-preview.11/MediaDownloader.exe"
     report = {"qa_directory": str(qa), "architecture": metadata}
     default_executable = (
-        Path(os.environ["LOCALAPPDATA"])
-        / "Programs/MediaDownloaderMSIQA/versions/0.2.0-preview.5/MediaDownloader.exe"
+        Path(os.environ["ProgramFiles"])
+        / "MediaDownloaderMSIQA/versions/0.2.0-preview.11/MediaDownloader.exe"
     )
     default_existed = default_executable.exists()
 
     def remembered_root():
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\MediaDownloaderMSIQA\Installer") as key:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"Software\MediaDownloaderMSIQA\Installer") as key:
             return Path(winreg.QueryValueEx(key, "InstallRoot")[0]).resolve()
 
     def run_msi(mode, target, log):
@@ -68,7 +69,7 @@ def main():
             check=True,
         )
         value = json.loads(output.read_text(encoding="utf-8"))
-        assert value["backend"]["client_version"] == "0.2.0.dev5"
+        assert value["backend"]["client_version"] == "0.2.0.dev11"
         assert all(value["layout"]["checks"].values())
         assert "test_cookie=fixture" not in output.read_text(encoding="utf-8")
         return value

@@ -9,5 +9,7 @@
     "release-assets.githubusercontent.com"
   ],
   "manifest_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/latest/download/release.json",
-  "signature_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/latest/download/release.sig"
+  "signature_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/latest/download/release.sig",
+  "catalog_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/download/channel-stable/catalog.json",
+  "catalog_signature_url": "https://github.com/chenzhenpeng/MediaDownloader-Windows/releases/download/channel-stable/catalog.sig"
 }

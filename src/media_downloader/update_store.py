@@ -10,6 +10,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from .component_catalog import verify_catalog
 from .engine import resolve_engine
 from .engine_health import probe_engine
 from .task_files import atomic_json
@@ -93,7 +94,13 @@ class EngineStore:
 
     def accept(self, raw, signature):
         manifest = verify_manifest(raw, signature, self.trust)
-        path = self.root / "update-policy.json"
+        if manifest.get("component") == "parsehub":
+            _, runtime = self.active_runtime()
+            if not runtime.runtime_id or runtime.runtime_id != manifest.get("requires_runtime_id"):
+                fail("UPDATE_RUNTIME", "此解析组件需要先更新执行运行环境。")
+        path = self.root / (
+            "parser-update-policy.json" if manifest.get("component") == "parsehub" else "update-policy.json"
+        )
         with update_lock(self.root):
             try:
                 no_reparse(path)
@@ -119,7 +126,54 @@ class EngineStore:
             )
         return manifest
 
-    def installed(self, identity, *, require_healthy=True):
+    def accept_catalog(self, raw, signature):
+        data, releases = verify_catalog(raw, signature, self.trust)
+        path = self.root / "catalog-policy.json"
+        with update_lock(self.root):
+            no_reparse(path)
+            try:
+                if path.exists() and path.stat().st_size > 4096:
+                    raise ValueError("Oversize catalog policy")
+                policy = strict_json(path.read_bytes()) if path.exists() else {"sequence": 0}
+                sequence = policy["sequence"]
+                if type(sequence) is not int:
+                    raise ValueError("Invalid sequence")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise UpdateError("UPDATE_POLICY", "组件目录防重放记录无效。") from exc
+            digest = hashlib.sha256(raw).hexdigest()
+            if data["sequence"] < sequence or data["sequence"] == sequence and policy.get("sha256") != digest:
+                fail("UPDATE_REPLAY", "组件更新目录过旧或与已接受目录冲突。")
+            atomic_json(path, {"sequence": data["sequence"], "sha256": digest})
+        return releases
+
+    def runtime_reference(self, identity):
+        path = self.root / "engines" / identity / "runtime-reference.json"
+        no_reparse(path)
+        if not path.exists():
+            return "bundled"  # Before composition records, parser packages used the bundled runtime.
+        if path.stat().st_size > 4096:
+            fail("UPDATE_STATE", "运行环境引用无效。")
+        try:
+            reference = strict_json(path.read_bytes())["runtime"]
+            if reference != "bundled" and not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}-[0-9a-f]{12}", reference
+            ):
+                raise ValueError("Invalid runtime identity")
+            return reference
+        except (ValueError, KeyError, TypeError) as exc:
+            raise UpdateError("UPDATE_STATE", "运行环境引用无效。") from exc
+
+    def active_runtime(self):
+        identity = self.state()["current"]
+        if identity == "bundled":
+            return identity, self.bundled
+        selected = self.installed(identity)
+        if selected.component == "parsehub":
+            identity = self.runtime_reference(identity)
+            selected = self.installed(identity, runtime_only=True)
+        return identity, selected
+
+    def installed(self, identity, *, require_healthy=True, runtime_only=False):
         if identity == "bundled":
             return self.bundled
         if not isinstance(identity, str) or not re.fullmatch(
@@ -153,7 +207,12 @@ class EngineStore:
             ):
                 fail("UPDATE_HEALTH", "候选内核尚未完成自检，不能作为当前内核。")
         verify_inventory(directory / "payload", manifest)
-        engine = resolve_engine(directory / "payload")
+        runtime = self.bundled
+        if manifest.get("component") == "parsehub":
+            if runtime_only:
+                fail("UPDATE_STATE", "解析组件不能用作执行运行环境。")
+            runtime = self.installed(self.runtime_reference(identity), runtime_only=True)
+        engine = resolve_engine(directory / "payload", runtime=runtime)
         if engine.version != manifest["engine_version"] or engine.upstream_sha != manifest["upstream_sha"]:
             fail("UPDATE_INVENTORY", "内核描述与签名发布清单不一致。")
         return engine
@@ -184,6 +243,9 @@ class EngineStore:
 
     def install(self, archive, raw, signature, *, cancelled=lambda: False):
         manifest = self.accept(raw, signature)
+        runtime_identity, runtime = (
+            self.active_runtime() if manifest.get("component") == "parsehub" else ("bundled", self.bundled)
+        )
         identity = release_id(manifest)
         with update_lock(self.root):
             target = self.root / "engines" / identity
@@ -209,7 +271,9 @@ class EngineStore:
             extract_archive(Path(archive), stage / "payload", manifest, cancelled=cancelled)
             (stage / "release.json").write_bytes(raw)
             (stage / "release.sig").write_bytes(signature)
-            engine = resolve_engine(stage / "payload")
+            if manifest.get("component") == "parsehub":
+                atomic_json(stage / "runtime-reference.json", {"runtime": runtime_identity})
+            engine = resolve_engine(stage / "payload", runtime=runtime)
             if (
                 engine.version != manifest["engine_version"]
                 or engine.upstream_sha != manifest["upstream_sha"]
@@ -282,6 +346,12 @@ class EngineStore:
             if state["pending"]:
                 return
             keep = {state["current"], state["last_good"]}
+            for identity in tuple(keep):
+                if (
+                    identity != "bundled"
+                    and (self.root / "engines" / identity / "runtime-reference.json").exists()
+                ):
+                    keep.add(self.runtime_reference(identity))
             parent = self.root / "engines"
             no_reparse(parent)
             if not parent.exists():

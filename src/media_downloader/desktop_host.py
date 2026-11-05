@@ -138,6 +138,8 @@ class DesktopHost:
             "id": task["id"],
             "title": task["title"] or "正在获取作品信息",
             "state": state,
+            "action": task["action"],
+            "has_preview": bool(preview.get("resource_id")),
             "platform": task["platform"],
             "platform_name": PLATFORMS[task["platform"]].name
             if task["platform"] in PLATFORMS
@@ -195,6 +197,11 @@ class DesktopHost:
         result = {
             "client_version": __version__,
             "engine_version": self.service.engine.version,
+            "runtime_version": getattr(self.service.engine, "runtime_version", "")
+            or self.service.engine.version,
+            "parser_version": getattr(self.service.engine, "parser_version", ""),
+            "parser_component_version": getattr(self.service.engine, "parser_component_version", "")
+            or self.service.engine.version,
             "counts": {
                 "active": sum(t["state"] not in TERMINAL for t in tasks),
                 "history": sum(t["state"] in TERMINAL for t in tasks),
@@ -232,9 +239,20 @@ class DesktopHost:
                     self, "official_result", {"status": "idle", "message": "可检查官方版本。"}
                 ),
                 "status": self.updates.status,
+                "component": (getattr(self.updates, "manifest", None) or {}).get("component", "engine"),
+                "candidate_version": (getattr(self.updates, "manifest", None) or {}).get(
+                    "engine_version", ""
+                ),
                 "message": self.updates.message,
                 "configured": self.updates.engines.trust.configured,
                 "busy": self.updates.busy,
+                "downloaded_bytes": getattr(self.updates, "progress", (0, 0))[0],
+                "total_bytes": getattr(self.updates, "progress", (0, 0))[1],
+                "cancel_requested": bool(
+                    self.updates.busy
+                    and getattr(self.updates, "cancelled", None)
+                    and self.updates.cancelled.is_set()
+                ),
                 "locked": self.store.setting("engine_update_locked", False),
                 "auto": self.store.setting("update_auto_check", False),
                 "can_rollback": update_state["current"] != update_state["last_good"],

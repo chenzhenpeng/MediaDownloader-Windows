@@ -77,12 +77,19 @@ def main():
             send("update", {"action": "rollback"})
             reverted = wait_status("rolled_back", timeout=120)
             assert reverted["engine_version"] == before["engine_version"]
-            policy = json.loads((output / "data/update-policy.json").read_bytes())
+            component = upgraded["update"].get("component", "engine")
+            policy_name = "parser-update-policy.json" if component == "parsehub" else "update-policy.json"
+            policy = json.loads((output / "data" / policy_name).read_bytes())
+            if component == "parsehub":
+                assert upgraded["runtime_version"] == before["runtime_version"]
             report = {
                 "passed": True,
                 "scope": "Frozen production backend; actual GitHub HTTPS feed; isolated data",
                 "before": before["engine_version"],
                 "upgraded": upgraded["engine_version"],
+                "component": component,
+                "runtime_before": before["runtime_version"],
+                "runtime_after": upgraded["runtime_version"],
                 "rollback": reverted["engine_version"],
                 "sequence_after_rollback": policy["sequence"],
                 "states": states,

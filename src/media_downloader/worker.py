@@ -129,10 +129,18 @@ async def execute(command: dict):
 
 
 def main() -> int:
+    global ENGINE_VERSION, UPSTREAM_SHA
     # Frozen Python may ignore PYTHONIOENCODING/PYTHONUTF8; the wire is always UTF-8.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         if stream is not None and hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="strict")
+    if "--component-dir" in sys.argv:
+        index = sys.argv.index("--component-dir")
+        from .parser_runtime import activate
+
+        selected = activate(Path(sys.argv[index + 1]), Path(sys.executable).parent / "engine.json")
+        ENGINE_VERSION, UPSTREAM_SHA = selected["engine_version"], selected["upstream_sha"]
+        del sys.argv[index : index + 2]
     if "--serve" in sys.argv:
         from .engine_server import serve
 

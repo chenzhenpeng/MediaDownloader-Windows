@@ -1,4 +1,4 @@
-name: Build and sign reviewed engine draft
+name: Build and sign reviewed execution runtime draft
 on:
   workflow_dispatch:
     inputs:
@@ -31,16 +31,14 @@ jobs:
       - run: uv sync --locked
       # Hosted runners have no interactive desktop; keyboard focus is checked locally.
       - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short -k "not test_ui_keyboard_themes_and_responsive_layout"
-      - name: Fetch reviewed tool bundle
-        env:
-          ENGINE_TOOLS_URL: ${{ vars.ENGINE_TOOLS_URL }}
-          ENGINE_TOOLS_SHA256: ${{ vars.ENGINE_TOOLS_SHA256 }}
-        run: uv run --no-sync python scripts/fetch_build_tools.py
-      - name: Freeze engine and client for acceptance
+      - name: Fetch hash-pinned media tools
+        run: uv run --no-sync python scripts/fetch_media_tools.py
+      - name: Build only the execution runtime
         env:
           CANDIDATE_VERSION: ${{ inputs.engine_version }}
-        run: uv run --no-sync python scripts/build_m0.py --milestone m4 --engine-version $env:CANDIDATE_VERSION --ffmpeg-dir .cache/ffmpeg/bin
-      - run: uv run --no-sync python scripts/check_m0.py --milestone m4
+        run: uv run --no-sync python scripts/build_m0.py --milestone m4 --engine-version $env:CANDIDATE_VERSION --skip-client --skip-tools --ffmpeg-dir .cache/media-tools-ci/ffmpeg/bin --ytdlp-exe .cache/media-tools-ci/yt-dlp.exe
+      - name: Probe the actual frozen runtime
+        run: uv run --no-sync python -c "from pathlib import Path; from media_downloader.engine import resolve_engine; from media_downloader.engine_health import probe_engine; probe_engine(resolve_engine(Path('dist/m4/media-engine')))"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: reviewed-unsigned-engine

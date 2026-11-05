@@ -29,6 +29,7 @@ GROUPS = {
         "test/test_cli.py",
         "test/test_cli_config.py",
     ],
+    "0005-lightweight-metadata.patch": ["pyproject.toml", "src/parsehub/utils/media_info.py"],
 }
 
 

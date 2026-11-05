@@ -40,6 +40,14 @@
         "test/test_cli.py",
         "test/test_cli_config.py"
       ]
+    },
+    {
+      "file": "0005-lightweight-metadata.patch",
+      "sha256": "51e64c676609f819d4dbd5299770f371c6ba06e1cbda8f4c0b8155993a54d0f0",
+      "paths": [
+        "pyproject.toml",
+        "src/parsehub/utils/media_info.py"
+      ]
     }
   ],
   "excluded": {

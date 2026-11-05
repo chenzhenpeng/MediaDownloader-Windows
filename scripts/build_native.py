@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -13,6 +14,16 @@ OUT = ROOT / "dist/native/MediaDownloader"
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--engine-dir", type=Path, default=ROOT / "dist/localized/media-engine")
+    parser.add_argument(
+        "--reuse-backend", action="store_true", help="UI-only rebuild after a verified backend build"
+    )
+    args = parser.parse_args()
+    subprocess.run([sys.executable, str(ROOT / "scripts/build_app_icon.py")], cwd=ROOT, check=True)
+    source = args.engine_dir.resolve()
+    if not source.is_dir():
+        raise ValueError("Engine source directory does not exist")
     env = dict(
         os.environ,
         DOTNET_CLI_HOME=str(ROOT / ".cache/dotnet-home"),
@@ -21,10 +32,21 @@ def main():
         DOTNET_GENERATE_ASPNET_CERTIFICATE="false",
         PYINSTALLER_CONFIG_DIR=str(ROOT / ".cache/pyinstaller"),
     )
-    OUT.mkdir(parents=True, exist_ok=True)
+    # Always publish to an empty generated directory: an incremental copy keeps
+    # removed SDK components and old Python dependencies in the installer.
+    target = OUT.resolve()
+    if not target.is_relative_to((ROOT / "dist/native").resolve()) or source.is_relative_to(target):
+        raise ValueError("Unsafe or overlapping native output directory")
+    if target.exists():
+        shutil.rmtree(target)
+    OUT.mkdir(parents=True)
+    dotnet = ROOT / ".cache/dotnet/dotnet.exe"
+    sdk = str(dotnet) if dotnet.is_file() else shutil.which("dotnet")
+    if not sdk:
+        raise RuntimeError("Install the pinned .NET SDK before building the native application")
     subprocess.run(
         [
-            str(ROOT / ".cache/dotnet/dotnet.exe"),
+            sdk,
             "publish",
             "native/MediaDownloader/MediaDownloader.csproj",
             "--no-restore",
@@ -71,6 +93,7 @@ def main():
         "parsehub",
         "PySide6.QtWidgets",
         "PySide6.QtGui",
+        "PySide6.QtNetwork",
         "numpy",
         "cv2",
         "PIL",
@@ -78,9 +101,22 @@ def main():
         "pytest",
     ]:
         command += ["--exclude-module", module]
-    subprocess.run(command + [str(entry)], cwd=ROOT, env=env, check=True)
+    if not args.reuse_backend:
+        subprocess.run(command + [str(entry)], cwd=ROOT, env=env, check=True)
+    elif not (ROOT / "build/native-backend/MediaBackend/MediaBackend.exe").is_file():
+        raise ValueError("No built backend to reuse")
+    # QtCore supports scheduler signals/processes; no Qt GUI or software OpenGL
+    # is used by the stdio backend. PyInstaller's generic Qt hook adds this DLL.
+    software_gl = ROOT / "build/native-backend/MediaBackend/_internal/PySide6/opengl32sw.dll"
+    software_gl.unlink(missing_ok=True)
     shutil.copytree(ROOT / "build/native-backend/MediaBackend", OUT / "backend", dirs_exist_ok=True)
-    shutil.copytree(ROOT / "dist/localized/media-engine", OUT / "engine", dirs_exist_ok=True)
+    target = (OUT / "engine").resolve()
+    if source != target:
+        if not target.is_relative_to(ROOT.resolve() / "dist"):
+            raise ValueError("Engine destination escapes distribution directory")
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source, target)
     print(OUT, flush=True)
 
 

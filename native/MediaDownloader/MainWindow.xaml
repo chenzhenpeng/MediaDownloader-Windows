@@ -7,7 +7,7 @@
  <Grid x:Name="Root">
   <Grid.Resources>
    <DataTemplate x:Key="TaskTemplate">
-    <Grid MinHeight="94" Padding="16,12" ColumnSpacing="16" CornerRadius="6">
+    <Grid MinHeight="96" Padding="16,16" ColumnSpacing="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
      <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
      <Border Height="56" Width="56" CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
       <Grid>
@@ -16,9 +16,10 @@
       </Grid>
      </Border>
      <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-      <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxLines="1" FontWeight="SemiBold"/>
+      <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" MaxLines="1" FontSize="14"/>
       <TextBlock Text="{Binding Subtitle}" TextTrimming="CharacterEllipsis" Style="{StaticResource SecondaryText}"/>
       <TextBlock Text="{Binding StatusLine}" Style="{StaticResource CaptionTextBlockStyle}"/>
+      <TextBlock Text="{Binding Error}" TextTrimming="CharacterEllipsis" MaxLines="1" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}" Visibility="{Binding ErrorVisibility}"/>
       <ProgressBar Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}" Visibility="{Binding ProgressVisibility}" Height="3"/>
       <TextBlock Text="{Binding Progress}" TextTrimming="CharacterEllipsis" Style="{StaticResource CaptionTextBlockStyle}" Visibility="{Binding ProgressVisibility}"/>
      </StackPanel>
@@ -34,11 +35,12 @@
    <TitleBar.IconSource><ImageIconSource ImageSource="Assets/AppIcon.png"/></TitleBar.IconSource>
   </TitleBar>
   <NavigationView x:Name="Nav" Grid.Row="1" IsBackButtonVisible="Collapsed" IsSettingsVisible="True"
-   OpenPaneLength="200" CompactPaneLength="56" PaneDisplayMode="Auto" SelectionChanged="Nav_SelectionChanged"
+   OpenPaneLength="224" CompactPaneLength="56" PaneDisplayMode="Auto" SelectionChanged="Nav_SelectionChanged"
    CompactModeThresholdWidth="1000" ExpandedModeThresholdWidth="1150" IsPaneToggleButtonVisible="True">
    <NavigationView.MenuItems>
-    <NavigationViewItem Content="新建下载" Tag="home" Icon="Add"/>
-    <NavigationViewItem Content="下载管理" Tag="downloads" Icon="Download">
+    <NavigationViewItem Content="新建下载" Tag="home"><NavigationViewItem.Icon><FontIcon Glyph="&#xE710;" Style="{StaticResource NavigationIcon}"/></NavigationViewItem.Icon></NavigationViewItem>
+    <NavigationViewItem Content="下载管理" Tag="downloads">
+     <NavigationViewItem.Icon><FontIcon Glyph="&#xE896;" Style="{StaticResource NavigationIcon}"/></NavigationViewItem.Icon>
      <NavigationViewItem.InfoBadge><InfoBadge x:Name="DownloadBadge" Value="0" Visibility="Collapsed"/></NavigationViewItem.InfoBadge>
     </NavigationViewItem>
    </NavigationView.MenuItems>

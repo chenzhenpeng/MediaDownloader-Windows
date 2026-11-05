@@ -1,8 +1,32 @@
 import json
+import threading
 from types import SimpleNamespace
 
 from media_downloader.desktop_host import DesktopHost
 from media_downloader.repository import Store
+
+
+def test_download_preparation_keeps_confirmed_preview(tmp_path):
+    store = Store(tmp_path / "tasks.db")
+    try:
+        task_id = store.create("https://www.douyin.com/video/1", str(tmp_path))
+        preview = {"resource_id": "work-1", "thumbnails": ["fixture-artwork"], "media": []}
+        store.update(task_id, state="ready", title="Confirmed work", preview=json.dumps(preview))
+        host = DesktopHost.__new__(DesktopHost)
+        host.service = SimpleNamespace(progress={}, running={})
+        host.sent_thumbnails, host.visible_thumbnails = {}, set()
+        ready = host.public_task(store.get(task_id), {})
+        assert ready["has_preview"] and ready["thumbnail"] == "fixture-artwork"
+        assert store.retry(task_id)
+        for state in ("queued", "parsing", "downloading"):
+            store.update(task_id, state=state)
+            task = host.public_task(store.get(task_id), {})
+            assert task["action"] == "download" and task["has_preview"]
+            assert task["title"] == ready["title"]
+            assert task["thumbnail"] is None  # Existing artwork remains valid in the client.
+            assert json.loads(store.get(task_id)["preview"]) == preview
+    finally:
+        store.close()
 
 
 def test_snapshot_is_paginated_and_does_not_expose_credentials(tmp_path):
@@ -33,6 +57,13 @@ def test_snapshot_is_paginated_and_does_not_expose_credentials(tmp_path):
         assert first["total"] == 55 and len(first["tasks"]) == 50
         encoded = json.dumps(first)
         assert "private-cookie-value" not in encoded and "private-proxy-value" not in encoded
+        host.updates.progress = (400, 1000)
+        host.updates.cancelled = threading.Event()
+        host.updates.cancelled.set()
+        host.updates.busy = True
+        progress = host.snapshot()["update"]
+        assert (progress["downloaded_bytes"], progress["total_bytes"]) == (400, 1000)
+        assert progress["cancel_requested"]
         assert all("source" not in task and "config" not in task for task in first["tasks"])
         host.view["offset"] = 50
         second = host.snapshot()

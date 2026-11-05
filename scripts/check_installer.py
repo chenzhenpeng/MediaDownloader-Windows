@@ -1,7 +1,7 @@
 """Install/repair/uninstall in a workspace QA directory, preserving unknown files.
 
-Uses the real current-user uninstall entry. Refuses to run if the product is
-already installed, and never uninstalls an entry pointing outside this QA run.
+Uses a separate QA product identity and never uninstalls an entry pointing
+outside this QA run.
 """
 
 from __future__ import annotations
@@ -15,9 +15,11 @@ import time
 import winreg
 from pathlib import Path
 
+from build_installer import machine
+
 ROOT = Path(__file__).resolve().parents[1]
-KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{8F5574CB-A715-4BA1-AD07-4212A70D460B}_is1"
-VERSION = "0.2.0-preview.3"
+KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{B3EE607A-217F-4CBA-9037-A5C55D366932}_is1"
+VERSION = "0.2.0-preview.11"
 
 
 def installed():
@@ -44,9 +46,16 @@ def main():
     qa = ROOT / ".local/installer-qa" / str(time.time_ns())
     destination, data = qa / "安装目录", qa / "state"
     qa.mkdir(parents=True)
-    setup = ROOT / f"dist/release/MediaDownloader-{VERSION}-win-x64-Setup.exe"
-    inventory = json.loads((ROOT / f"dist/release/MediaDownloader-{VERSION}-payload.json").read_text())
-    report = {"qa_directory": str(qa), "release": VERSION}
+    setup = ROOT / f"dist/release/MediaDownloader-{VERSION}-win-x64-QA-Setup.exe"
+    assert machine(setup) == 0x8664
+    inventory = json.loads((ROOT / f"dist/release/MediaDownloader-{VERSION}-QA-payload.json").read_text())
+    report = {
+        "qa_directory": str(qa),
+        "release": VERSION,
+        "setup_x64": True,
+        "tested_without_admin": not bool(ctypes.windll.shell32.IsUserAnAdmin()),
+        "uses_msi": False,
+    }
     payload = destination / "versions" / VERSION
     executable = payload / "MediaDownloader.exe"
 
@@ -86,11 +95,13 @@ def main():
         assert install("install.log") == 0
         entry = assert_owned()
         assert entry["DisplayVersion"] == VERSION
+        assert machine(destination / "unins000.exe") == 0x8664
+        report["uninstaller_x64"] = True
         for item in inventory:
             assert sha(payload / item["path"]) == item["sha256"], item["path"]
         report["installed_inventory_files"] = len(inventory)
         first = smoke("first-launch")
-        assert first["backend"]["client_version"] == "0.2.0.dev3"
+        assert first["backend"]["client_version"] == "0.2.0.dev11"
         report["installed_native_launch"] = True
         sentinel = destination / "user-created-keep.txt"
         sentinel.write_text("User-owned file: preserve during repair and uninstall", encoding="utf-8")
@@ -101,7 +112,7 @@ def main():
         kernel.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
         kernel.CreateMutexW.restype = ctypes.c_void_p
         kernel.CloseHandle.argtypes = [ctypes.c_void_p]
-        handle = kernel.CreateMutexW(None, False, r"Local\MediaDownloader.Native.Running")
+        handle = kernel.CreateMutexW(None, False, r"Local\MediaDownloader.InstallerQA.Running")
         assert handle
         try:
             assert install("running-app-block.log") != 0
@@ -155,5 +166,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

@@ -11,6 +11,8 @@ public sealed class TaskItem : INotifyPropertyChanged
     public string Id { get; private set; } = "";
     public string Title { get; private set; } = "";
     public string State { get; private set; } = "";
+    public string Action { get; private set; } = "";
+    public bool HasPreview { get; private set; }
     public string PlatformName { get; private set; } = "";
     public string Path { get; private set; } = "";
     public string Error { get; private set; } = "";
@@ -23,18 +25,19 @@ public sealed class TaskItem : INotifyPropertyChanged
     public string Ended { get; private set; } = "";
     public BitmapImage? Image { get; private set; }
     private string thumbnail = "";
-    public string StateLabel => Invalid ? "文件无效" : State switch {
+    public string StateLabel => Invalid ? "文件无效" : Action == "download" && State is ("queued" or "parsing") ? State == "queued" ? "等待下载" : "准备下载" : State switch {
         "queued" => "等待中", "parsing" => "正在解析", "ready" => "待确认", "downloading" => "下载中",
         "finalizing" => "正在保存", "completed" => "已完成", "failed" => "失败", "interrupted" => "已中断",
         "cancelled" => "已取消", "cancelling" => "正在取消", _ => "等待中"
     };
     public string Subtitle => Invalid ? $"{PlatformName} · 文件无效，请重新下载" : $"{PlatformName} · {Media.FirstOrDefault() ?? "正在获取作品信息"}";
     public string StatusLine => string.Join(" · ", new[] { StateLabel, Size, Ended }.Where(v => !string.IsNullOrWhiteSpace(v)));
-    public string PrimaryLabel => State switch { "completed" => "打开文件", "ready" => "开始下载", "failed" or "interrupted" or "cancelled" => "重试", _ => "取消" };
+    public string PrimaryLabel => State switch { "completed" => "打开文件", "ready" => "开始下载", "failed" or "interrupted" or "cancelled" => Media.Length == 0 ? "重新解析" : "重试下载", _ => "取消" };
     public bool CanStart => State is "ready" or "failed" or "interrupted" or "cancelled";
     public bool CanCancel => State is "queued" or "parsing" or "ready" or "downloading";
     public bool PrimaryEnabled => State == "completed" || CanStart || CanCancel;
     public Visibility ProgressVisibility => State is "parsing" or "downloading" or "finalizing" ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ErrorVisibility => State == "failed" && Error.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ImageVisibility => Image is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility PlaceholderVisibility => Image is null ? Visibility.Visible : Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -42,6 +45,7 @@ public sealed class TaskItem : INotifyPropertyChanged
     public void Update(JsonElement task)
     {
         Id = task.String("id"); Title = task.String("title"); State = task.String("state");
+        Action = task.String("action"); HasPreview = task.Bool("has_preview");
         PlatformName = task.String("platform_name"); Path = task.String("path"); Error = task.String("error");
         Invalid = task.Bool("invalid"); Progress = task.String("progress");
         Media = task.GetProperty("media").EnumerateArray().Select(m => m.GetString() ?? "").ToArray();

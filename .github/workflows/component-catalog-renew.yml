@@ -1,0 +1,37 @@
+name: Renew signed component catalog
+on:
+  schedule:
+    - cron: '41 2 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: component-catalog-stable
+  cancel-in-progress: false
+jobs:
+  renew:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    environment: engine-release
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - name: Fetch fixed channel metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download channel-stable --pattern catalog.json --pattern catalog.sig --dir build/catalog
+      - name: Renew signatures and expiry without rebuilding artifacts
+        env:
+          ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
+        run: uv run --no-sync python scripts/renew_component_catalog.py build/catalog
+      - name: Publish renewed catalog pair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload channel-stable build/catalog/catalog.json build/catalog/catalog.sig --clobber

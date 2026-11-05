@@ -134,8 +134,14 @@ class UpdateFeed:
                     fail("UPDATE_MANIFEST", "本地更新清单大小无效。")
             return (directory / "release.json").read_bytes(), (directory / "release.sig").read_bytes()
         return (
-            self.bounded(self.trust.manifest_url, 131072, cancelled=cancelled),
-            self.bounded(self.trust.signature_url, 64, cancelled=cancelled),
+            self.bounded(
+                self.trust.catalog_url or self.trust.manifest_url,
+                2 * 1024**2 if self.trust.catalog_url else 131072,
+                cancelled=cancelled,
+            ),
+            self.bounded(
+                self.trust.catalog_signature_url or self.trust.signature_url, 64, cancelled=cancelled
+            ),
         )
 
     def download(self, manifest, directory, *, cancelled=lambda: False, progress=lambda done, total: None):

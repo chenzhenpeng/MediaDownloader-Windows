@@ -337,6 +337,32 @@ def test_pool_switch_waits_for_active_task_and_retains_attempt_versions(tmp_path
         tasks.close()
 
 
+def test_download_progress_is_published_without_repeating_unchanged_values(tmp_path):
+    tasks = Store(tmp_path / "tasks.db")
+    engine = fixture_engine("progress-test")
+    service = TaskService(tasks, engine=engine, max_workers=1)
+    manager = UpdateManager(service, EngineStore(tmp_path / "updates", Trust("beta", {}), engine))
+    events = []
+    manager.changed.connect(lambda: events.append(manager.progress))
+    try:
+        manager.status = "downloading"
+        manager._progress(250, 1000)
+        assert events == []
+        manager._tick()
+        assert events == [(250, 1000)]
+        manager._tick()
+        assert events == [(250, 1000)]
+        manager._progress(750, 1000)
+        manager._tick()
+        assert events[-1] == (750, 1000)
+        manager.cancel()
+        assert manager.cancelled.is_set()
+    finally:
+        manager.shutdown()
+        service.shutdown()
+        tasks.close()
+
+
 def test_bad_worker_handshake_recovers_without_restarting_ui(tmp_path):
     app = QCoreApplication.instance()
     tasks = Store(tmp_path / "tasks.db")

@@ -36,7 +36,7 @@ public sealed partial class MainWindow
         taskPage.RowDefinitions.Add(new RowDefinition());
         taskPage.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new Grid(); header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titles = new StackPanel { Spacing = 8 }; taskTitle.Style = (Style)Application.Current.Resources["TitleTextBlockStyle"];
+        var titles = new StackPanel { Spacing = 6 }; taskTitle.Style = (Style)Application.Current.Resources["PageTitle"];
         taskDescription.Style = (Style)Application.Current.Resources["SecondaryText"]; taskDescription.TextWrapping = TextWrapping.Wrap;
         taskTitle.Text = "下载管理"; taskDescription.Text = "查看所有下载，管理进度与已保存的作品。";
         titles.Children.Add(taskTitle); titles.Children.Add(taskDescription); header.Children.Add(titles);
@@ -55,8 +55,9 @@ public sealed partial class MainWindow
         taskSearch.TextChanged += (_, _) => { if (!loadingSnapshot) { searchTimer.Stop(); searchTimer.Start(); } };
         taskFilter.SelectionChanged += async (_, _) => { if (!loadingSnapshot) await ChangeViewAsync(); };
         var content = new Grid(); taskList = TaskList(visibleTasks); content.Children.Add(taskList);
-        taskEmpty.Children.Add(new FontIcon { Glyph = "\uE896", FontSize = 32, HorizontalAlignment = HorizontalAlignment.Center });
-        taskEmptyTitle.Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"]; taskEmptyTitle.HorizontalAlignment = HorizontalAlignment.Center;
+        taskEmpty.Children.Add(new Border { Style = (Style)Application.Current.Resources["ProcessBadge"], Width = 64, Height = 64,
+            CornerRadius = new CornerRadius(32), Child = new FontIcon { Glyph = "\uE896", FontSize = 28 }, HorizontalAlignment = HorizontalAlignment.Center });
+        taskEmptyTitle.Style = (Style)Application.Current.Resources["SectionTitle"]; taskEmptyTitle.HorizontalAlignment = HorizontalAlignment.Center;
         taskEmptyTitle.TextAlignment = TextAlignment.Center; taskEmptyTitle.TextWrapping = TextWrapping.Wrap;
         taskEmpty.Children.Add(taskEmptyTitle);
         var emptyDescription = Text("添加作品链接，预览后即可开始下载。", "SecondaryText");
@@ -75,7 +76,7 @@ public sealed partial class MainWindow
     {
         if ((sender as FrameworkElement)?.DataContext is not TaskItem item) return;
         if (item.State == "completed") await OpenPathAsync(item, true);
-        else if (item.CanStart) { if (await CallAsync("download", new { id = item.Id }) is not null) ShowInfo("已加入下载队列。"); }
+        else if (item.CanStart) { if (await CallAsync("download", new { id = item.Id }) is not null) ShowInfo(item.Media.Length == 0 ? "正在重新解析作品。" : "已加入下载队列。"); }
         else if (item.CanCancel) await CallAsync("cancel", new { id = item.Id });
     }
 

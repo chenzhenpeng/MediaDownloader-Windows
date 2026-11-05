@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from packaging.version import Version
 
 from media_downloader import PROTOCOL
 from media_downloader.update_archive import inventory_bytes
@@ -33,6 +34,10 @@ def package_release(
     notes=None,
 ):
     metadata = json.loads((engine_dir / "engine.json").read_text(encoding="utf-8"))
+    if metadata.get("component") == "parsehub" and Version(minimum) < Version("0.2.0.dev6"):
+        minimum = "0.2.0.dev6"
+    if metadata.get("adapter_abi") and Version(minimum) < Version("0.2.0.dev11"):
+        minimum = "0.2.0.dev11"
     if metadata["protocol"] != PROTOCOL or metadata["target"] != "windows-x86_64":
         raise ValueError("Engine descriptor is incompatible with this release builder")
     output.mkdir(parents=True, exist_ok=False)
@@ -65,6 +70,13 @@ def package_release(
         "notes": notes or ["解析内核兼容更新"],
         "key_id": key_id,
     }
+    if metadata.get("component") == "parsehub":
+        manifest.update(component="parsehub", requires_runtime_id=metadata["requires_runtime_id"])
+    elif metadata.get("runtime_id"):
+        manifest["runtime_id"] = metadata["runtime_id"]
+        manifest["parser_component_version"] = metadata.get(
+            "parser_component_version", metadata["engine_version"]
+        )
     raw = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
     signature = key.sign(raw)
     trust = Trust(
