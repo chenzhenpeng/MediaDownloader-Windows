@@ -6,7 +6,7 @@ The application package, ParseHub parser component, and execution runtime have s
 
 ## Windows application
 
-The main installer is a native x64 EXE with current-user installation. Close the application before upgrading. Settings, encrypted credentials, task history and downloaded files are retained. Preview installers do not yet have a product code-signing certificate. The optional MSI is a separate legacy/deployment path.
+The main installer is a native x64 EXE with current-user installation. Close the application before upgrading. Preview 13 starts a new data baseline under LocalAppData/MediaDownloader/v4. Older settings, credentials and task history are not migrated; existing files are left untouched. Preview installers do not yet have a product code-signing certificate. The optional MSI is a separate legacy/deployment path.
 
 The interface supports Windows themes, encrypted per-platform Cookie storage with masked readback, per-post folders, and one download management page. The platform catalog describes parser capabilities; availability and accepted media types vary by platform.
 
@@ -24,7 +24,7 @@ Application, parser and execution-runtime build workflows are under `.github/wor
 
 ## Updates
 
-New clients use the signed fixed `channel-stable` component catalog rather than repository Latest. Normal updates require a newer compatible component. Parser updates reuse an authenticated matching runtime; pointer changes represent complete version combinations and preserve a known-good rollback. Old clients retain the previous full-engine discovery path.
+New clients use the signed fixed `channel-stable` component catalog rather than repository Latest. Normal updates require a newer compatible component. Parser updates reuse an authenticated matching runtime; pointer changes represent complete version combinations and preserve a known-good rollback. The component catalog is the only discovery path. Repository Latest points to the current client installer; older client compatibility is not maintained.
 
 Upstream polling prepares candidate PRs and replays reviewed patches. It does not automatically execute or publish arbitrary upstream changes. Release workflows create drafts for acceptance. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
 
@@ -37,3 +37,5 @@ Vendored ParseHub retains its [MIT license](upstream-ParseHub/LICENSE). Bundled 
 ## Original-package migration
 
 Preview 13 keeps the accepted production engine. The direct official ParseHub package path has passed isolated task-service validation but is still explicitly experimental; see [migration status](docs/official-package-status.md). Updating the source repository does not enable this path in installed clients.
+
+Preview 13 starts a fresh current-client data baseline; see [baseline and install notes](docs/preview13-clean-baseline.md).

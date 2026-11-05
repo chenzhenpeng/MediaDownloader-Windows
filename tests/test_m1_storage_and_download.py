@@ -22,7 +22,7 @@ def test_long_title_budget_accounts_for_repeated_folder_and_filename(tmp_path):
     assert error.value.code == "PATH_TOO_LONG"
 
 
-def test_m0_database_upgrades_without_losing_encrypted_source(tmp_path):
+def test_obsolete_database_is_rejected_without_migration(tmp_path):
     path = tmp_path / "old.db"
     store = Store(path)
     task_id = store.create("https://www.douyin.com/video/123", str(tmp_path))
@@ -33,14 +33,12 @@ def test_m0_database_upgrades_without_losing_encrypted_source(tmp_path):
     legacy.execute("PRAGMA user_version=1")
     legacy.commit()
     legacy.close()
-    upgraded = Store(path)
-    try:
-        assert upgraded.get(task_id)["source"] == encrypted
-        assert upgraded.get(task_id)["error_code"] == ""
-        upgraded.update(task_id, error_code="NETWORK_TIMEOUT")
-        assert upgraded.db.execute("PRAGMA user_version").fetchone()[0] == 3
-    finally:
-        upgraded.close()
+    with pytest.raises(RuntimeError, match="数据库版本"):
+        Store(path)
+    with sqlite3.connect(path) as unchanged:
+        assert unchanged.execute("SELECT source FROM tasks WHERE id=?", (task_id,)).fetchone()[0] == encrypted
+        assert unchanged.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert not path.with_name(path.name + ".pre-v4.bak").exists()
 
 
 def test_forbidden_range_part_does_not_restart_whole_download(monkeypatch, tmp_path):

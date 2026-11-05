@@ -154,7 +154,7 @@ def test_connection_snapshot_is_encrypted_and_does_not_change_mid_attempt(
     assert "session=old" not in snapshot and store.setting("douyin.cookie") == new
 
 
-def committed_fixture(store, root, *, platform_folder=False):
+def committed_fixture(store, root):
     task_id = store.create("https://www.douyin.com/video/601", str(root), "download")
     task = store.get(task_id)
     attempt = task["attempt_id"]
@@ -164,10 +164,8 @@ def committed_fixture(store, root, *, platform_folder=False):
     output = work / "payload"
     output.mkdir()
     (output / "video.mp4").write_bytes(b"verified output")
-    final = root / f"title_{task_id[:8]}_{attempt[:6]}"
-    if platform_folder:
-        final = root / "小红书" / final.name
-        final.parent.mkdir()
+    final = root / "抖音" / f"title_{task_id[:8]}_{attempt[:6]}"
+    final.parent.mkdir()
     token = store.authorize_commit(task_id, attempt, str(final))
     command = {"output_root": str(root), "task_id": task_id, "attempt_id": attempt}
     manifest = build_manifest(output, command, {}, "test", "test")
@@ -177,11 +175,10 @@ def committed_fixture(store, root, *, platform_folder=False):
     return task_id, attempt, final, token
 
 
-@pytest.mark.parametrize("platform_folder", [False, True])
-def test_restart_recovers_committed_files_before_marking_complete(tmp_path, platform_folder):
+def test_restart_recovers_committed_files_before_marking_complete(tmp_path):
     path = tmp_path / "tasks.db"
     store = Store(path)
-    task_id, attempt, final, token = committed_fixture(store, tmp_path, platform_folder=platform_folder)
+    task_id, attempt, final, token = committed_fixture(store, tmp_path)
     store.close()
     store = Store(path)
     service = TaskService(store)
@@ -253,21 +250,19 @@ def test_waiting_preview_cancel_preserves_successful_inspect_history(local_engin
     assert store.attempts(task_id)[0]["state"] == "ready"
 
 
-def test_schema_backup_and_newer_schema_rejection(tmp_path):
+@pytest.mark.parametrize("version", [2, 99])
+def test_noncurrent_schema_is_rejected_without_migration(tmp_path, version):
     path = tmp_path / "tasks.db"
     store = Store(path)
     task_id = store.create("https://www.douyin.com/video/704", str(tmp_path))
-    store.db.execute("PRAGMA user_version=2")
+    store.db.execute(f"PRAGMA user_version={version}")
     store.close()
-    upgraded = Store(path)
-    assert upgraded.get(task_id)
-    assert path.with_name("tasks.db.pre-v3.bak").exists()
-    upgraded.db.execute("PRAGMA user_version=99")
-    upgraded.close()
-    with pytest.raises(RuntimeError, match="newer client"):
+    with pytest.raises(RuntimeError, match="数据库版本"):
         Store(path)
     with sqlite3.connect(path) as untouched:
-        assert untouched.execute("PRAGMA user_version").fetchone()[0] == 99
+        assert untouched.execute("PRAGMA user_version").fetchone()[0] == version
+        assert untouched.execute("SELECT id FROM tasks").fetchone()[0] == task_id
+    assert not list(tmp_path.glob("*.bak"))
 
 
 def test_two_workers_bound_concurrency_and_queue_survives_restart(tmp_path, monkeypatch):

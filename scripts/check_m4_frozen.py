@@ -8,8 +8,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from build_component_catalog import build as build_catalog
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from release_engine import package_release
+
+from media_downloader.update_contracts import Trust
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,6 +33,14 @@ def main():
     descriptor.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     key = Ed25519PrivateKey.generate()  # Ephemeral QA key; never added to the distributed trust file.
     manifest = package_release(candidate, output / "feed", key, sequence=7)
+    raw, signature = build_catalog(
+        [((output / "feed/release.json").read_bytes(), (output / "feed/release.sig").read_bytes())],
+        key,
+        Trust("beta", {"local-test": key.public_key().public_bytes_raw()}, local_feed=output / "feed"),
+        7,
+    )
+    (output / "feed/catalog.json").write_bytes(raw)
+    (output / "feed/catalog.sig").write_bytes(signature)
     trust_file = output / "test-trust.json"
     trust_file.write_text(
         json.dumps(

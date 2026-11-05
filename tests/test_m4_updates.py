@@ -12,7 +12,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from PySide6.QtCore import QCoreApplication
 from scripts.release_engine import package_release
-from scripts.renew_engine_feed import renew
+from scripts.renew_release_manifest import renew
 from scripts.sync_upstream import apply_reviewed_patch
 from test_worker_integration import wait_for
 
@@ -224,7 +224,11 @@ def test_duplicate_and_symlink_archive_rejected_before_writing(tmp_path):
 
 def test_https_redirect_allowlist_and_interrupted_download(tmp_path):
     trust = Trust(
-        "stable", {}, ("updates.example",), "https://updates.example/release", "https://updates.example/sig"
+        "stable",
+        {},
+        ("updates.example",),
+        catalog_url="https://updates.example/catalog",
+        catalog_signature_url="https://updates.example/sig",
     )
 
     def redirect(request):
@@ -232,7 +236,7 @@ def test_https_redirect_allowlist_and_interrupted_download(tmp_path):
 
     feed = UpdateFeed(trust, transport=httpx.MockTransport(redirect))
     with pytest.raises(UpdateError) as error:
-        feed.bounded(trust.manifest_url, 100)
+        feed.bounded(trust.catalog_url, 100)
     assert error.value.code == "UPDATE_SOURCE"
     for url in (
         "http://updates.example/x",
@@ -250,6 +254,35 @@ def test_https_redirect_allowlist_and_interrupted_download(tmp_path):
     with pytest.raises(UpdateError):
         feed.download({"artifact_url": "https://updates.example/zip", "size_bytes": 20}, tmp_path)
     assert not list(tmp_path.glob("*.part"))
+
+
+def test_local_discovery_uses_only_signed_catalog_paths(tmp_path):
+    (tmp_path / "release.json").write_bytes(b"obsolete-direct-feed")
+    (tmp_path / "catalog.json").write_bytes(b"catalog")
+    (tmp_path / "catalog.sig").write_bytes(b"s" * 64)
+    trust = Trust("beta", {"test": b"x" * 32}, local_feed=tmp_path)
+    assert UpdateFeed(trust).check() == (b"catalog", b"s" * 64)
+
+
+def test_obsolete_discovery_configuration_is_rejected(tmp_path):
+    import base64
+
+    from media_downloader.update_contracts import load_trust
+
+    path = tmp_path / "obsolete-trust.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "channel": "stable",
+                "keys": {"test": base64.b64encode(b"x" * 32).decode()},
+                "manifest_url": "https://updates.example/release.json",
+                "signature_url": "https://updates.example/release.sig",
+            }
+        )
+    )
+    with pytest.raises(UpdateError):
+        load_trust(path)
 
 
 def test_update_lock_is_exclusive(signed_release):

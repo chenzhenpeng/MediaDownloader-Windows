@@ -45,24 +45,13 @@ class Trust:
     channel: str
     keys: dict[str, bytes]
     allowed_hosts: tuple[str, ...] = ()
-    manifest_url: str = ""
-    signature_url: str = ""
     local_feed: Path | None = None
     catalog_url: str = ""
     catalog_signature_url: str = ""
 
     @property
     def configured(self):
-        return bool(
-            self.keys
-            and (
-                self.local_feed
-                or self.manifest_url
-                and self.signature_url
-                or self.catalog_url
-                and self.catalog_signature_url
-            )
-        )
+        return bool(self.keys and (self.local_feed or self.catalog_url and self.catalog_signature_url))
 
     def check_url(self, value):
         try:
@@ -90,6 +79,16 @@ def load_trust(path: Path, *, allow_local=False) -> Trust:
             raise ValueError("Invalid trust structure")
         if data["schema_version"] != 1 or data["channel"] not in {"stable", "beta"}:
             raise ValueError("Invalid configuration")
+        if set(data) - {
+            "schema_version",
+            "channel",
+            "keys",
+            "allowed_hosts",
+            "development_directory",
+            "catalog_url",
+            "catalog_signature_url",
+        }:
+            raise ValueError("Unsupported update configuration fields")
         keys = {key: base64.b64decode(value, validate=True) for key, value in data["keys"].items()}
         if (
             len(keys) > 8
@@ -101,18 +100,16 @@ def load_trust(path: Path, *, allow_local=False) -> Trust:
         if local and not allow_local:
             raise ValueError("Local feeds require explicit developer configuration")
         trust = Trust(
-            data["channel"],
-            keys,
-            tuple(data.get("allowed_hosts", [])),
-            data.get("manifest_url") or "",
-            data.get("signature_url") or "",
-            (path.parent / local).resolve() if local else None,
-            data.get("catalog_url") or "",
-            data.get("catalog_signature_url") or "",
+            channel=data["channel"],
+            keys=keys,
+            allowed_hosts=tuple(data.get("allowed_hosts", [])),
+            local_feed=(path.parent / local).resolve() if local else None,
+            catalog_url=data.get("catalog_url") or "",
+            catalog_signature_url=data.get("catalog_signature_url") or "",
         )
         if trust.configured and not local:
-            trust.check_url(trust.catalog_url or trust.manifest_url)
-            trust.check_url(trust.catalog_signature_url or trust.signature_url)
+            trust.check_url(trust.catalog_url)
+            trust.check_url(trust.catalog_signature_url)
         return trust
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise UpdateError("UPDATE_CONFIG", "更新源配置无效，当前内核仍可使用。") from exc

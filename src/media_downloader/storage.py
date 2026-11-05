@@ -25,9 +25,8 @@ def output_directory(root, platform, title, task_id, attempt_id) -> Path:
 
 def valid_output_directory(root, directory, task_id, attempt_id) -> bool:
     root, directory = Path(root).resolve(), Path(directory)
-    # Accept historical flat directories as well as the new fixed platform layer.
     parent = directory.parent
-    allowed = parent == root or (parent.parent == root and parent.name in PLATFORM_FOLDERS.values())
+    allowed = parent.parent == root and parent.name in PLATFORM_FOLDERS.values()
     return (
         allowed
         and directory.resolve() == directory
@@ -42,7 +41,9 @@ def valid_output_directory(root, directory, task_id, attempt_id) -> bool:
 def data_directory() -> Path:
     override = os.environ.get("MEDIA_DOWNLOADER_DATA_DIR")
     base = (
-        Path(override) if override else Path(os.environ.get("LOCALAPPDATA", Path.home())) / "MediaDownloader"
+        Path(override)
+        if override
+        else Path(os.environ.get("LOCALAPPDATA", Path.home())) / "MediaDownloader" / "v4"
     )
     base.mkdir(parents=True, exist_ok=True)
     return base

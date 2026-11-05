@@ -123,7 +123,7 @@ def build_manifest(directory: Path, command: dict, preview: dict, engine_version
     }
 
 
-def verify_output(root, final_dir, task_id, attempt_id, commit_token, *, legacy=False):
+def verify_output(root, final_dir, task_id, attempt_id, commit_token):
     from .storage import valid_output_directory
 
     directory = Path(final_dir)
@@ -143,7 +143,7 @@ def verify_output(root, final_dir, task_id, attempt_id, commit_token, *, legacy=
     data = json.loads(marker.read_text(encoding="utf-8"))
     if data.get("task_id") != task_id or data.get("attempt_id") != attempt_id:
         raise ValueError("Output identity mismatch")
-    if not legacy and (not commit_token or data.get("commit_token") != commit_token):
+    if not commit_token or data.get("commit_token") != commit_token:
         raise ValueError("Commit token mismatch")
     files = data.get("files")
     if not isinstance(files, list) or not files or len(files) > 2000:
@@ -158,10 +158,9 @@ def verify_output(root, final_dir, task_id, attempt_id, commit_token, *, legacy=
         if item["size"] <= 0 or not path.is_file() or path.stat().st_size != item["size"]:
             raise ValueError("Output size mismatch")
         digest = item.get("sha256")
-        if not legacy or digest:
-            with path.open("rb") as stream:
-                if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
-                    raise ValueError("Output checksum mismatch")
+        with path.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
+                raise ValueError("Output checksum mismatch")
         expected.add(relative.as_posix())
     if actual != expected:
         raise ValueError("Unexpected output files")

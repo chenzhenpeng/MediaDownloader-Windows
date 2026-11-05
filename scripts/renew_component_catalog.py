@@ -9,10 +9,10 @@ from cryptography.hazmat.primitives import serialization
 
 if __package__:
     from .build_component_catalog import build
-    from .renew_engine_feed import renew
+    from .renew_release_manifest import renew
 else:
     from build_component_catalog import build
-    from renew_engine_feed import renew
+    from renew_release_manifest import renew
 
 from media_downloader.component_catalog import verify_catalog
 from media_downloader.update_contracts import load_trust

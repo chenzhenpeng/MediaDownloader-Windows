@@ -76,12 +76,11 @@ class UpdateManager(QObject):
 
         def run():
             raw, signature = self.feed.check(cancelled=self.cancelled.is_set)
-            if self.engines.trust.catalog_url:
-                releases = self.engines.accept_catalog(raw, signature)
-                selected = choose(releases, current, current.runtime_id, component=component)
-                if selected is None:
-                    return None
-                _, raw, signature = selected
+            releases = self.engines.accept_catalog(raw, signature)
+            selected = choose(releases, current, current.runtime_id, component=component)
+            if selected is None:
+                return None
+            _, raw, signature = selected
             manifest = self.engines.accept(raw, signature)
             if component != "all" and manifest.get("component", "engine") != component:
                 return None

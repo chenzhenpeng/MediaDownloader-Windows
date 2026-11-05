@@ -69,7 +69,7 @@ class TaskService(QObject):
         self.verifications = []
         self.cleanups = {}
         self.pending_removals = set()
-        from .history_repair import audit_outputs
+        from .output_audit import audit_outputs
 
         audit_jobs = [
             (
@@ -407,7 +407,6 @@ class TaskService(QObject):
             task["id"],
             task["attempt_id"],
             attempt["commit_token"],
-            legacy=bool(attempt["legacy"]),
         )
         self.verifications.append((task, future, attempt, recovering))
 

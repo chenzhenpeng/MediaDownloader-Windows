@@ -31,7 +31,7 @@ def newer(manifest, engine):
                 return False
         return Version(manifest["engine_version"]) > Version(current)
     except InvalidVersion:
-        # Unknown legacy versions require an explicit migration, never a guessed upgrade.
+        # Invalid versions are not sortable update candidates.
         return False
 
 

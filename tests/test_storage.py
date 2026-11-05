@@ -6,15 +6,28 @@ from media_downloader.storage import Store, extract_links, safe_name
 from media_downloader.windows import protect, unprotect
 
 
+def test_default_data_directory_starts_fresh_without_loading_old_data(tmp_path, monkeypatch):
+    from media_downloader.storage import data_directory
+
+    monkeypatch.delenv("MEDIA_DOWNLOADER_DATA_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old = tmp_path / "MediaDownloader/tasks.sqlite3"
+    old.parent.mkdir()
+    old.write_bytes(b"old-database-must-remain-untouched")
+    assert data_directory() == old.parent / "v4"
+    assert old.read_bytes() == b"old-database-must-remain-untouched"
+    assert not (data_directory() / "tasks.sqlite3").exists()
+
+
 @pytest.mark.parametrize("platform,folder", [("xhs", "小红书"), ("douyin", "抖音"), ("bilibili", "哔哩哔哩")])
-def test_post_directory_layout_and_legacy_compatibility(tmp_path, platform, folder):
+def test_post_directory_layout_rejects_flat_directories(tmp_path, platform, folder):
     from media_downloader.storage import output_directory, valid_output_directory
 
     path = output_directory(tmp_path, platform, "帖子:标题/图集", "a" * 32, "b" * 32)
     assert path.parent == tmp_path.resolve() / folder
     assert path.name == "帖子_标题_图集_aaaaaaaa_bbbbbb"
     assert valid_output_directory(tmp_path, path, "a" * 32, "b" * 32)
-    assert valid_output_directory(tmp_path, tmp_path / path.name, "a" * 32, "b" * 32)
+    assert not valid_output_directory(tmp_path, tmp_path / path.name, "a" * 32, "b" * 32)
     assert not valid_output_directory(tmp_path, tmp_path / "任意目录" / path.name, "a" * 32, "b" * 32)
     assert not valid_output_directory(tmp_path, tmp_path.parent / path.name, "a" * 32, "b" * 32)
     assert output_directory(tmp_path, platform, "same", "a" * 32, "c" * 32) != path

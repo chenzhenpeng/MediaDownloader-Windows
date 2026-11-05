@@ -107,6 +107,8 @@ def main():
         sentinel.write_text("User-owned file: preserve during repair and uninstall", encoding="utf-8")
         database = data / "tasks.sqlite3"
         with sqlite3.connect(database) as db:
+            assert db.execute("PRAGMA user_version").fetchone()[0] == 4
+            report["database_schema"] = 4
             db.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", ("installer_qa_preserve", '"keep"'))
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]

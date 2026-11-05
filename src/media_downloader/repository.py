@@ -11,7 +11,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from .contracts import platform_for_url
 
-SCHEMA = 3
+SCHEMA = 4
 TERMINAL = {"ready", "completed", "failed", "cancelled", "interrupted"}
 TRANSITIONS = {
     "queued": {"parsing", "cancelled", "failed"},
@@ -56,14 +56,12 @@ class Store:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version > SCHEMA:
+        existing = self.db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tasks'"
+        ).fetchone()
+        if version not in {0, SCHEMA} or version == 0 and existing:
             self.db.close()
-            raise RuntimeError("This database requires a newer client")
-        if 0 < version < SCHEMA:
-            backup = self.path.with_name(f"{self.path.name}.pre-v{SCHEMA}.bak")
-            if not backup.exists():
-                with sqlite3.connect(backup) as target:
-                    self.db.backup(target)
+            raise RuntimeError("不支持此数据库版本，请使用当前客户端的新数据目录。")
         self.db.execute("PRAGMA journal_mode=WAL")
         with self.transaction():
             self.db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -73,23 +71,16 @@ class Store:
                 action TEXT NOT NULL, output_root TEXT NOT NULL, final_dir TEXT NOT NULL DEFAULT '',
                 error TEXT NOT NULL DEFAULT '', preview TEXT NOT NULL DEFAULT '{}',
                 engine_version TEXT NOT NULL,
-                upstream_sha TEXT NOT NULL, created_at TEXT NOT NULL)""")
-            columns = {row[1] for row in self.db.execute("PRAGMA table_info(tasks)")}
-            for name, definition in (
-                ("error_code", "TEXT NOT NULL DEFAULT ''"),
-                ("revision", "INTEGER NOT NULL DEFAULT 0"),
-                ("source_key", "TEXT NOT NULL DEFAULT ''"),
-            ):
-                if name not in columns:
-                    self.db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
+                upstream_sha TEXT NOT NULL, created_at TEXT NOT NULL,
+                error_code TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0,
+                source_key TEXT NOT NULL DEFAULT '')""")
             self.db.execute("""CREATE TABLE IF NOT EXISTS attempts (
                 id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), action TEXT NOT NULL,
                 state TEXT NOT NULL, queued_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
                 worker_pid INTEGER, engine_version TEXT NOT NULL, upstream_sha TEXT NOT NULL,
                 config_snapshot TEXT NOT NULL DEFAULT '{}', work_dir TEXT NOT NULL DEFAULT '',
                 final_dir TEXT NOT NULL DEFAULT '', commit_token TEXT NOT NULL DEFAULT '',
-                error_code TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '',
-                legacy INTEGER NOT NULL DEFAULT 0)""")
+                error_code TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '')""")
             self.db.execute("""CREATE TABLE IF NOT EXISTS outputs (
                 attempt_id TEXT NOT NULL REFERENCES attempts(id), relative_path TEXT NOT NULL,
                 size_bytes INTEGER NOT NULL, sha256 TEXT, PRIMARY KEY(attempt_id, relative_path))""")
@@ -100,42 +91,8 @@ class Store:
             self.db.execute("CREATE INDEX IF NOT EXISTS tasks_source ON tasks(source_key,state)")
             self.db.execute("CREATE INDEX IF NOT EXISTS attempts_task ON attempts(task_id,queued_at)")
             self.db.execute("CREATE INDEX IF NOT EXISTS cleanup_pending ON cleanup(state,due_at)")
-            for row in self.db.execute("SELECT * FROM tasks").fetchall():
-                self.db.execute(
-                    """INSERT OR IGNORE INTO attempts
-                    (id,task_id,action,state,queued_at,engine_version,upstream_sha,final_dir,legacy)
-                    VALUES (?,?,?,?,?,?,?,?,1)""",
-                    (
-                        row["attempt_id"],
-                        row["id"],
-                        row["action"],
-                        row["state"],
-                        row["created_at"],
-                        row["engine_version"],
-                        row["upstream_sha"],
-                        row["final_dir"],
-                    ),
-                )
-                if not row["source_key"]:
-                    from .windows import unprotect
-
-                    try:
-                        source = unprotect(row["source"])
-                        self.db.execute(
-                            "UPDATE tasks SET source_key=?,platform=? WHERE id=?",
-                            (
-                                source_key(source, row["output_root"]),
-                                platform_for_url(source) or row["platform"],
-                                row["id"],
-                            ),
-                        )
-                    except OSError:
-                        pass
             self.db.execute(f"PRAGMA user_version={SCHEMA}")
         # Queued work survives restart. In-flight work never silently retries.
-        from .history_repair import repair_durations
-
-        repair_durations(self)
         for task in self.tasks():
             if task["state"] in {"parsing", "downloading"}:
                 self.transition(

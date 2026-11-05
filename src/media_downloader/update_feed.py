@@ -127,21 +127,19 @@ class UpdateFeed:
         if self.trust.local_feed:
             directory = self.trust.local_feed
             no_reparse(directory)
-            for name, limit in (("release.json", 131072), ("release.sig", 64)):
+            for name, limit in (("catalog.json", 2 * 1024**2), ("catalog.sig", 64)):
                 path = directory / name
                 no_reparse(path)
                 if path.stat().st_size > limit:
                     fail("UPDATE_MANIFEST", "本地更新清单大小无效。")
-            return (directory / "release.json").read_bytes(), (directory / "release.sig").read_bytes()
+            return (directory / "catalog.json").read_bytes(), (directory / "catalog.sig").read_bytes()
         return (
             self.bounded(
-                self.trust.catalog_url or self.trust.manifest_url,
-                2 * 1024**2 if self.trust.catalog_url else 131072,
+                self.trust.catalog_url,
+                2 * 1024**2,
                 cancelled=cancelled,
             ),
-            self.bounded(
-                self.trust.catalog_signature_url or self.trust.signature_url, 64, cancelled=cancelled
-            ),
+            self.bounded(self.trust.catalog_signature_url, 64, cancelled=cancelled),
         )
 
     def download(self, manifest, directory, *, cancelled=lambda: False, progress=lambda done, total: None):

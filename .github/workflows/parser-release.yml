@@ -88,4 +88,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           COMPONENT_VERSION: ${{ inputs.component_version }}
-        run: gh release create "engine-$env:COMPONENT_VERSION" build/signed-parser/engine.zip build/signed-parser/release.json build/signed-parser/release.sig --target $env:GITHUB_SHA --draft --title "ParseHub component $env:COMPONENT_VERSION" --notes "ParseHub sources only; unchanged compatible runtime required. Verify frozen client installation and rollback before publishing."
+        run: gh release create "engine-$env:COMPONENT_VERSION" build/signed-parser/engine.zip build/signed-parser/release.json build/signed-parser/release.sig --target $env:GITHUB_SHA --draft --latest=false --title "ParseHub component $env:COMPONENT_VERSION" --notes "ParseHub sources only; unchanged compatible runtime required. Verify frozen client installation and rollback before publishing."
