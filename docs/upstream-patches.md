@@ -1,9 +1,11 @@
-# 本地内核补丁记录
+# 历史源码回归基线
+
+> 本文只说明开发树的历史补丁。0.3 发布客户端使用未修改的官方 ParseHub wheel，组件更新不重放这些补丁。开发测试仍保留该基线；当前架构以 [组件说明](components.md) 为准。
 
 基线：ParseHub `75a99d6fc46e15c4b994d5245ea4518404088c99`。
-当前内核构建版本：dev5（M4）；上游源补丁沿用 M1。改动位于 `upstream-ParseHub/src`，不得当作未修改的上游快照。M2–M4 新增内容位于应用 worker、任务和更新服务中。
+历史内核构建版本：dev5（M4）；上游源补丁沿用 M1。改动位于 `upstream-ParseHub/src`，不得当作未修改的上游快照。M2–M4 新增内容位于应用 worker、任务和更新服务中。
 
-M4 已将源代码及 Windows 测试改动导出到 `patches/parsehub` 的四组补丁，`patchset.json` 固定基线 SHA、文件范围和补丁 SHA-256；13 个重放文件与 vendored 代码等价，见 [重放记录](../review/m4-patch-replay.json)。`scripts/sync_upstream.py` 在隔离候选树中重放，冲突停止。原始上游 `uv.lock` 不作为删除补丁，应用依赖仍由根目录锁文件管理。
+M4 已将源代码及 Windows 测试改动导出到 `patches/parsehub` 的四组补丁，`patchset.json` 固定基线 SHA、文件范围和补丁 SHA-256；13 个重放文件与 vendored 代码等价，重放证据由本地或 CI 生成，不随文档提交。`scripts/sync_upstream.py` 在隔离候选树中重放，冲突停止。原始上游 `uv.lock` 不作为删除补丁，应用依赖仍由根目录锁文件管理。
 
 | 补丁 | 文件 | 原因 |
 |---|---|---|

@@ -67,7 +67,7 @@ jobs:
         run: |
           gh release view channel-components-v1 --json tagName 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create channel-components-v1 --target $env:GITHUB_SHA --latest=false --title 'Stable component update catalog' --notes 'Signed discovery catalog. Runtime and parser artifacts remain in immutable versioned releases.'
+            gh release create channel-components-v1 --target $env:GITHUB_SHA --latest=false --title '[更新渠道] 执行组件' --notes '供应用自动读取的签名更新目录，无需手动下载。安装软件请访问 Releases/latest。ParseHub 官方包独立从 PyPI 获取，本渠道只管理执行组件。'
             if ($LASTEXITCODE -ne 0) { throw 'Channel creation failed' }
           }
           gh release upload channel-components-v1 build/catalog/catalog.json build/catalog/catalog.sig --clobber

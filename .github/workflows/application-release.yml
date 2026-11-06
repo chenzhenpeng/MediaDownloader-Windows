@@ -70,5 +70,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $release = Get-Content dist/release/release.json -Raw | ConvertFrom-Json
-          Set-Content build/app-release-notes.md 'Native x64 application package. Complete isolated desktop installation, repair, uninstall and UI acceptance before publication. Runtime and parser updates use the signed component channel.'
-          gh release create "client-$($release.release)" "dist/release/$($release.installer)" dist/release/SHA256SUMS.txt --target $env:GITHUB_SHA --draft --title "Media Downloader $($release.release)" --notes-file build/app-release-notes.md
+          Copy-Item .github/release-application.md build/app-release-notes.md
+          gh release create "client-$($release.release)" "dist/release/$($release.installer)" dist/release/SHA256SUMS.txt --target $env:GITHUB_SHA --draft --latest=false --title "Media Downloader $($release.release) · Windows x64" --notes-file build/app-release-notes.md

@@ -98,6 +98,7 @@ jobs:
             $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/engine.zip"
             uv run --no-sync python scripts/release_engine.py $directory --output "build/signed/$kind" --key-id $env:ENGINE_KEY_ID --sequence $env:RELEASE_SEQUENCE --artifact-url $url --channel stable
             if ($LASTEXITCODE -ne 0) { throw 'Component signing failed' }
-            gh release create $tag "build/signed/$kind/engine.zip" "build/signed/$kind/release.json" "build/signed/$kind/release.sig" --draft --latest=false --target $env:GITHUB_SHA --title "$kind $($metadata.version)" --notes 'Independent signed component candidate. Publish only after complete execution-profile acceptance.'
+            $labels = @{ 'worker'='Worker'; 'python-runtime'='Python 环境'; 'media-tools'='媒体工具' }
+            gh release create $tag "build/signed/$kind/engine.zip" "build/signed/$kind/release.json" "build/signed/$kind/release.sig" --draft --latest=false --target $env:GITHUB_SHA --title "[组件] $($labels[$kind]) $($metadata.version)" --notes-file .github/release-component.md
             if ($LASTEXITCODE -ne 0) { throw 'Component draft publication failed' }
           }
