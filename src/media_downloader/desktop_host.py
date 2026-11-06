@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import QCoreApplication, QLockFile, QStandardPaths, QTimer
 
 from . import __version__
+from .component_store import ComponentStore as EngineStore
+from .component_updates import ProfileUpdateManager as UpdateManager
 from .engine import resolve_engine, tool_versions
 from .engine_server import stdin_chunks
 from .official_update import check_official_release
@@ -29,8 +31,7 @@ from .scheduler import TaskService
 from .storage import data_directory, extract_links
 from .ui_capabilities import CapabilityReader
 from .update_contracts import Trust, UpdateError, load_trust
-from .update_manager import UpdateManager, default_trust_file
-from .update_store import EngineStore
+from .update_manager import default_trust_file
 from .windows import protect, unprotect
 
 WIRE = sys.stdout
@@ -197,6 +198,10 @@ class DesktopHost:
         result = {
             "client_version": __version__,
             "engine_version": self.service.engine.version,
+            "worker_version": self.service.engine.component_versions.get("worker", ""),
+            "component_versions": self.service.engine.component_versions,
+            "media_tools_source": "local" if self.updates.engines.refs()["media-tools"].startswith(
+                "media-tools-local-") else "managed",
             "runtime_version": getattr(self.service.engine, "runtime_version", "")
             or self.service.engine.version,
             "parser_version": getattr(self.service.engine, "parser_version", ""),
@@ -404,6 +409,8 @@ class DesktopHost:
             elif action == "install":
                 requested = str(p.get("component", "all"))
                 selected = (getattr(self.updates, "manifest", None) or {}).get("component", "engine")
+                if selected == "environment-plan":
+                    selected = "engine"
                 if requested != "all" and requested != selected:
                     raise ValueError("Update component changed; check again")
                 self.updates.install()
@@ -415,6 +422,8 @@ class DesktopHost:
                     self.updates.cancel()
             elif action == "auto":
                 self.store.set_setting("update_auto_check", bool(p["value"]))
+        elif method == "media_tools":
+            self.updates.configure_tools(p.get("directory") or None)
         elif method == "diagnostics":
             return diagnostic_report(self.store, self.service.engine)
         elif method == "shutdown":

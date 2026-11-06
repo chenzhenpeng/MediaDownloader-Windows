@@ -1,46 +1,44 @@
-# 应用包、ParseHub 解析组件与执行环境
+# 独立组件与执行组合（0.3 新基线）
 
-Preview 14 启用官方 PyPI 原包，三类组件保持独立。
-
-| 发布单元 | 包含 | 更新方式 |
+| 发布单元 | 内容 | 更新来源 |
 | --- | --- | --- |
-| 应用包 | WinUI 3 界面、任务服务、SQLite、凭据和更新管理 | GitHub 上的 x64 安装程序 |
-| ParseHub | 未修改的官方 wheel，初始版本 2.4.0 | 客户端直接检查 PyPI、下载并校验原包；版本与上游一致 |
-| 执行环境 | Python、worker、适配层、固定依赖及媒体工具 | GitHub 上的独立签名包；初始环境版本 0.2.0 |
+| 应用包 | WinUI、任务服务、数据库、凭据、更新协调器 | x64 安装程序 |
+| Worker | IPC、官方 SDK 适配、预览、下载处理、HLS 合并及文件提交 | 本项目签名小包 |
+| ParseHub | 未修改的官方 wheel，初始 2.4.0 | 官方 PyPI，保留原版本和原包 |
+| Python 环境 | Python 3.13.17、固定依赖和 Python yt-dlp 模块 | 独立签名完整环境包 |
+| 媒体工具 | FFmpeg、ffprobe 和许可文件 | 独立签名工具包，或显式选择本地目录 |
 
-执行环境 0.2.1 在应用适配层处理有限、未加密的 MPEG-TS HLS 播放列表：逐分段检查网络地址、下载，交给 FFmpeg 从本地合并，再用 ffprobe 检查视频流和总时长。官方 ParseHub 2.4.0 wheel 保持原样。直播、加密、分层播放列表、字节范围和不支持的分段扩展会明确失败，不会当作 MP4 保存成功。更新执行环境即可获得此修复，无需重新安装客户端。
+Python 环境不包含 Worker 或 ParseHub。Worker 使用明确模块清单构建，不再复制整个客户端 Python 包。文件路径计算已与数据库导出模块分离，Worker 不导入 UI 或数据库。
 
-适配层负责把上游结果转换为客户端数据、校验文件和协调落盘，不放进 ParseHub wheel。任务数据库和 Cookie 不由 ParseHub 更新管理。
+## 组合启动与更新
 
-## 解析组件更新
+初始安装的 `engine/profile.json` 引用四个独立组件目录。启动使用明确绝对路径和隔离 Python，检查 ABI、协议、版本范围、SDK 依赖与实际导入来源。
 
-设置页的“检查官方更新”读取 `pypi.org/pypi/parsehub/json`，仅接受稳定版通用 wheel，从 `files.pythonhosted.org` 下载。HTTPS 元数据提供文件大小与 SHA256；此信任来源与我们签名的执行环境清单不同，不混称为发布者签名。
+本项目组件通过 `channel-components-v1` 签名目录发现，采用协议 3。更新计划只下载发生变化的组件，安装到不可变目录，然后构造完整候选组合。依赖验证及独立进程自检成功后，等待任务空闲，原子切换一个组合指针；握手成功后确认。中断或失败恢复上一完整组合，清理保留当前和上一组合引用的组件。
 
-安装前检查完整归档、路径、文件数量、解压大小、包名、版本、Python 要求、依赖版本和 extras。不运行 pip 或安装脚本，不改动 Python 和依赖。候选通过独立进程自检后等待当前任务结束，再进行启动握手和切换；失败或中断恢复上一组合。
+官方 ParseHub 仍直接读取 PyPI，检查 wheel、固定 HTTPS 来源、大小、SHA256、归档路径、Python、依赖和 extras。不在用户机器上运行 pip 或构建代码。PyPI HTTPS+摘要和本项目 Ed25519 签名是不同信任来源，不混称为发布者签名。官方原包同样经过完整组合验证和切换。
 
-原始 wheel 和安装回执保留在版本目录。重启时重新比对 wheel 摘要及每个解压文件。正常更新不降级，不替换相同版本。默认每天检查，安装仍通过显式按钮确认；支持版本锁定和取消。
+## 本地媒体工具
 
-上游依赖或接口变化时，需要单独更新执行环境或适配层，并非任意未来版本都能直接兼容。
+设置可以选择同时包含 `ffmpeg.exe`、`ffprobe.exe` 的本地目录。检查 x64 PE、版本及 MPEG-TS/MP4 能力，记录二进制摘要，组合解析时重新检查。在线更新跳过显式选择的本地工具。外部目录不会被复制、覆盖或清理；“使用自带”会构造引用随包工具的新组合。
 
-## 执行环境
+Python 暂只支持完整环境包，不自动修改系统 Python。yt-dlp 暂随依赖包成套管理，不能用独立 EXE 替代 SDK 使用的 Python 模块。
 
-环境使用官方 Python 3.13.17 嵌入包和 `packaging/official-runtime.lock` 的完整哈希锁。原包需要 OpenCV/NumPy，不能在保留原始源码的同时继续省略它们。上游直接使用 Python yt-dlp 模块，所以环境保留锁定的模块，移除了重复的独立 yt-dlp EXE。
+## 构建和发布
 
-执行环境继续从固定 `channel-stable/catalog.json` 及签名发现更新，验证渠道、架构、协议、应用版本、摘要、清单和健康检查。仓库 Latest 只指向客户端安装包。
+- `build_official_runtime.py --seed-only` 从官方 Python 和哈希锁创建构建种子，不作为客户端布局发布。
+- `build_component_bundle.py` 分离组件和原始 wheel，生成离线组合并探测。
+- `components-release.yml` 在 GitHub Actions 构建、签名指定的变化组件，生成独立草稿。
+- `component-catalog.yml` / `component-catalog-renew.yml` 发布、续签新组件渠道。
+- `application-release.yml` / `materialize_components.py` 消费三个验签组件及官方 wheel，构建完整安装包。
+- `upstream-watch.yml` 只读监测官方 PyPI，不重放补丁或重新包装解析器。
 
-`current`、`pending`、`last_good` 表示完整版本组合。解析组件记录所引用环境，不能引用另一解析包作为环境。保留当前、上一组合及其环境，避免清理仍在使用的依赖。禁止字节码写入，包含上游启动的 yt-dlp 子进程。
+完整安装包目前仍携带离线所需组件；拆分主要减少后续更新流量，初装大小不会缩至 Worker 的大小。精简安装器是后续分发选项。
 
-## GitHub 工作流
+## 验收与边界
 
-- `application-release.yml`：消费验签后的环境，构建应用和独立 QA 安装包，验收后发布。
-- `engine-release.yml`：在 Actions 构建完整环境，独立签名作业使用受保护发布密钥；不要求本地构建。
-- `component-catalog.yml` / `component-catalog-renew.yml`：发布及续签执行环境目录。
-- `upstream-watch.yml`：只读检查官方 PyPI 元数据，不重放补丁，不重新发布解析器。
+393 项非交互回归和 104 个子测试通过。真实签名 Worker 测试更新包约 33 KiB，其他组件复用原目录；签名安装、重启恢复、本地工具和中断回滚均通过。原生冻结后端发现 24 个平台，快手 39 分段样本完整下载为约 296 秒且含音轨的 MP4。
 
-原来的 `parser-release.yml` 已移除。解析组件升级无需我们先生成一个自定义解析包。
+不宣称所有平台均已实测，带凭据视频号仍需独立验证。HLS 当前支持有限、未加密的 MPEG-TS 清单。
 
-## 当前验证
-
-非交互回归 373 项通过，104 个子测试通过。真实官方 wheel 的安装、自检、重启和回滚通过；抖音、快手完整下载以及小红书 28 文件图集任务通过。视频号无凭据时明确返回需要认证；携带凭据的下载仍未通过本轮验收，其他上游平台也未全部实测。
-
-新架构使用 `%LOCALAPPDATA%/MediaDownloader/v5`，不导入旧环境、任务或凭据，不删除旧文件。详见 [官方包更新说明](./official-package-status.md)。
+新客户端使用 `%LOCALAPPDATA%/MediaDownloader/v6`，不导入旧组件、设置、任务或凭据，不删除旧数据及下载文件。旧环境不能作为新执行组合启动。

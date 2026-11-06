@@ -14,6 +14,11 @@ from .update_contracts import UpdateError, fail, strict_json, verify_manifest
 
 def newer(manifest, engine):
     """Normal updates never use the explicit rollback path or compare unequal only."""
+    if manifest.get("component") == "environment-plan":
+        return any(newer(item, engine) for item in manifest["components"])
+    if manifest.get("component") in {"worker", "python-runtime", "media-tools"}:
+        current = engine.component_versions.get(manifest["component"], "0")
+        return Version(manifest["engine_version"]) > Version(current)
     current = engine.version
     if manifest.get("component") == "parsehub":
         current = engine.parser_component_version or engine.version

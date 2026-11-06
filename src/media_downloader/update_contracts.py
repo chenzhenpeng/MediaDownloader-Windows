@@ -135,7 +135,9 @@ def verify_manifest(raw: bytes, signature: bytes, trust: Trust, *, installed=Fal
             raise ValueError("Key/channel mismatch")
         if data["target"] != "windows-x86_64" or data["protocol_version"] != PROTOCOL:
             fail("UPDATE_INCOMPATIBLE", "此内核需要其他架构或更新版本的客户端。")
-        if data.get("component", "engine") not in {"engine", "parsehub"}:
+        if data.get("component", "engine") not in {
+            "engine", "parsehub", "worker", "python-runtime", "media-tools"
+        }:
             fail("UPDATE_INCOMPATIBLE", "客户端暂不支持此更新组件。")
         if data.get("component") == "parsehub" and not re.fullmatch(
             r"rt1-[0-9a-f]{24}", data.get("requires_runtime_id", "")

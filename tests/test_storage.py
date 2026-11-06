@@ -14,7 +14,7 @@ def test_default_data_directory_starts_fresh_without_loading_old_data(tmp_path, 
     old = tmp_path / "MediaDownloader/tasks.sqlite3"
     old.parent.mkdir()
     old.write_bytes(b"old-database-must-remain-untouched")
-    assert data_directory() == old.parent / "v5"
+    assert data_directory() == old.parent / "v6"
     assert old.read_bytes() == b"old-database-must-remain-untouched"
     assert not (data_directory() / "tasks.sqlite3").exists()
 

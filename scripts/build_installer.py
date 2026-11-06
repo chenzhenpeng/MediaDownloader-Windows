@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "0.2.0-preview.15"
+RELEASE = "0.3.0-preview.1"
 
 
 def machine(path):
@@ -45,13 +45,15 @@ def main():
         "MainWindow.xbf",
         "App.xbf",
         "backend/MediaBackend.exe",
-        "engine/engine.json",
+        "engine/profile.json",
     ]
     if not all((payload / name).is_file() for name in required):
         raise RuntimeError("Build the native payload first")
-    engine = json.loads((payload / "engine/engine.json").read_text(encoding="utf-8"))
-    executable = "python.exe" if engine.get("layout") == "official-embedded" else "media-engine.exe"
-    if not (payload / "engine" / executable).is_file():
+    profile = json.loads((payload / "engine/profile.json").read_text(encoding="utf-8"))
+    components = {kind: payload / "engine" / relative for kind, relative in profile["components"].items()}
+    versions = {kind: json.loads((path / "component.json").read_bytes())["version"]
+                for kind, path in components.items()}
+    if not (components["python-runtime"] / "python.exe").is_file():
         raise RuntimeError("Execution runtime is missing")
     files = sorted(path for path in payload.rglob("*") if path.is_file())
     if any(path.suffix in {".db", ".sqlite3", ".lock"} for path in files):
@@ -82,9 +84,10 @@ def main():
     assert machine(installer) == 0x8664, "The setup loader itself must be native x64"
     report = {
         "release": RELEASE,
-        "client": "0.2.0.dev15",
+        "client": "0.3.0.dev1",
         "setup_machine": "x64",
-        "engine": engine["engine_version"],
+        "engine": versions["worker"],
+        "components": versions,
         "installer": installer.name,
         "bytes": installer.stat().st_size,
         "sha256": digest(installer),

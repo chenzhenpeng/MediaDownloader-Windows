@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
         self.service = TaskService(store, self, engine=engine)
         self.updates = None
         if engine_store is not None:
-            from .update_manager import UpdateManager
+            from .component_updates import ProfileUpdateManager as UpdateManager
 
             self.updates = UpdateManager(self.service, engine_store, self)
         self.service.changed.connect(self.refresh)

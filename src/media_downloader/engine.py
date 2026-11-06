@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import ENGINE_VERSION, PROTOCOL, UPSTREAM_SHA
@@ -21,12 +21,18 @@ class Engine:
     parser_version: str = ""
     component: str = "engine"
     parser_component_version: str = ""
+    components: dict[str, str] = field(default_factory=dict)
+    component_versions: dict[str, str] = field(default_factory=dict)
 
 
 def resolve_engine(directory: Path | None = None, *, runtime: Engine | None = None) -> Engine:
     if directory is None and not getattr(sys, "frozen", False):
         return Engine(ENGINE_VERSION, UPSTREAM_SHA, sys.executable, ("-m", "media_downloader.worker"))
     directory = (directory or Path(sys.executable).parent / "engine").resolve()
+    if (directory / "profile.json").is_file():
+        from .execution_profile import load_bundle
+
+        return load_bundle(directory)
     manifest = json.loads((directory / "engine.json").read_text(encoding="utf-8"))
     if manifest["protocol"] != PROTOCOL or manifest["target"] != "windows-x86_64":
         raise ValueError("Incompatible engine")
@@ -77,6 +83,13 @@ def resolve_engine(directory: Path | None = None, *, runtime: Engine | None = No
 
 
 def tool_versions(engine: Engine) -> dict[str, str]:
+    if engine.components:
+        from .execution_profile import descriptor
+
+        tools = descriptor(engine.components["media-tools"], "media-tools")
+        python = descriptor(engine.components["python-runtime"], "python-runtime")
+        return {"yt-dlp": python["contract"]["dependencies"].get("yt-dlp", ""),
+                **{name: tools["versions"][name]["version"] for name in ("ffmpeg", "ffprobe")}}
     descriptor = Path(engine.program).parent / "engine.json"
     try:
         if descriptor.stat().st_size > 1_000_000:

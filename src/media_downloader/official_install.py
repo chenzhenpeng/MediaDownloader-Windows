@@ -23,6 +23,10 @@ from .update_contracts import fail, strict_json
 
 
 def runtime_contract(runtime):
+    if runtime.components:
+        from .execution_profile import descriptor
+
+        return descriptor(runtime.components["python-runtime"], "python-runtime")["contract"]
     path = Path(runtime.program).parent / "engine.json"
     no_reparse(path)
     if path.stat().st_size > 1024**2:

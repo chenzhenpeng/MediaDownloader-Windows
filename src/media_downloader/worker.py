@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from . import ENGINE_VERSION, PROTOCOL, UPSTREAM_SHA
-from .storage import download_stem, output_directory, valid_output_directory
+from .media_paths import download_stem, output_directory, valid_output_directory
 
 WIRE = sys.stdout
 

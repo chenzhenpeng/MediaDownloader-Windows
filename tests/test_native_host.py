@@ -39,9 +39,16 @@ def test_snapshot_is_paginated_and_does_not_expose_credentials(tmp_path):
         store.set_setting("douyin.proxy", "private-proxy-value")
         host = DesktopHost.__new__(DesktopHost)
         host.store = store
-        host.service = SimpleNamespace(progress={}, running={}, engine=SimpleNamespace(version="test"))
+        host.service = SimpleNamespace(
+            progress={},
+            running={},
+            engine=SimpleNamespace(version="test", component_versions={}, components={}),
+        )
         host.updates = SimpleNamespace(
-            engines=SimpleNamespace(state=lambda: {"current": "bundled", "last_good": "bundled"}),
+            engines=SimpleNamespace(
+                state=lambda: {"current": "bundled", "last_good": "bundled"},
+                refs=lambda: {"media-tools": "bundled"},
+            ),
             status="idle",
             message="",
             busy=False,

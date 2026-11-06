@@ -124,7 +124,7 @@ def build_manifest(directory: Path, command: dict, preview: dict, engine_version
 
 
 def verify_output(root, final_dir, task_id, attempt_id, commit_token):
-    from .storage import valid_output_directory
+    from .media_paths import valid_output_directory
 
     directory = Path(final_dir)
     root = Path(root).resolve()

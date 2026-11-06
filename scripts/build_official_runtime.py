@@ -24,7 +24,7 @@ from media_downloader.official_packages import check_latest, download_wheel, ins
 from media_downloader.update_archive import no_reparse, safe_relative  # noqa: E402
 
 
-def build(output, version, tools):
+def build(output, version, tools, *, seed_only=False):
     no_reparse(output)
     if output.exists():
         raise ValueError("Official runtime output must be a new directory")
@@ -190,7 +190,8 @@ def build(output, version, tools):
         if not source.is_file():
             raise ValueError("Required FFmpeg redistribution notice is missing")
         shutil.copy2(source, notices / name)
-    probe_engine(resolve_engine(output))
+    if not seed_only:
+        probe_engine(resolve_engine(output))
     print(
         json.dumps(
             {
@@ -208,10 +209,11 @@ def build(output, version, tools):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--seed-only", action="store_true")
     parser.add_argument("--version", required=True)
     parser.add_argument("--tools", required=True, type=Path)
     args = parser.parse_args()
-    build(args.output.absolute(), args.version, args.tools.absolute())
+    build(args.output.absolute(), args.version, args.tools.absolute(), seed_only=args.seed_only)
 
 
 if __name__ == "__main__":

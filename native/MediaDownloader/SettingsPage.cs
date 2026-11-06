@@ -20,6 +20,7 @@ public sealed partial class MainWindow
     private readonly Expander connectionSection = new() { Header = "平台连接", HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch };
     private readonly ToggleSwitch updateAuto = new(), updateLock = new();
     private readonly TextBlock productVersion = new();
+    private readonly TextBlock workerVersionInfo = new(), pythonVersionInfo = new();
     private readonly TextBlock componentVersions = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock runtimeVersions = new() { TextWrapping = TextWrapping.Wrap }, runtimeMessage = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock ffmpegVersions = new() { TextWrapping = TextWrapping.Wrap }, ytdlpVersions = new() { TextWrapping = TextWrapping.Wrap };
@@ -145,11 +146,13 @@ public sealed partial class MainWindow
         runtimeInstall = ActionButton("安装运行环境", async (_, _) => await CallAsync("update", new { action = "install", component = "engine" }), true);
         runtimeCancel = ActionButton("取消更新", async (_, _) => await CallAsync("update", new { action = "cancel" }));
         runtimeActions.Children.Add(runtimeCheck); runtimeActions.Children.Add(runtimeInstall); runtimeActions.Children.Add(runtimeCancel);
-        settingsRuntimeRow = SettingRow("worker、Python 与依赖", "", runtimeActions); settingsRuntimeRow.MinHeight = 84;
+        settingsRuntimeRow = SettingRow("执行组件更新", "", runtimeActions); settingsRuntimeRow.MinHeight = 84;
         runtimeMessage.Style = (Style)Application.Current.Resources["SecondaryText"]; runtimeMessage.FontSize = 12;
         var runtimeWords = (StackPanel)settingsRuntimeRow.Children[0]; runtimeWords.Children.RemoveAt(1); runtimeWords.Children.Add(runtimeMessage); runtimeWords.Children.Add(runtimeProgress);
         var runtimeBody = new StackPanel(); runtimeBody.Children.Add(settingsRuntimeRow);
         runtimeVersions.Style = (Style)Application.Current.Resources["SecondaryText"]; runtimeVersions.FontSize = 12; runtimeVersions.Margin = new Thickness(64, 0, 16, 12); runtimeBody.Children.Add(runtimeVersions);
+        runtimeBody.Children.Add(SettingRow("Worker", "负责解析适配、下载处理和文件校验，可独立更新。", workerVersionInfo));
+        runtimeBody.Children.Add(SettingRow("Python 与依赖", "成套管理 Python 和固定依赖，不随 Worker 修复重复下载。", pythonVersionInfo));
         environment.Children.Add(SettingsCard(runtimeBody)); body.Children.Add(environment);
         var tools = SettingsGroup("媒体工具"); var toolRows = new StackPanel();
         foreach (var (title, version, kind) in new[] { ("FFmpeg / ffprobe", ffmpegVersions, "ffmpeg"), ("yt-dlp", ytdlpVersions, "yt-dlp") }) {
@@ -158,6 +161,15 @@ public sealed partial class MainWindow
             ((StackPanel)row.Children[0]).Children.RemoveAt(1); ((StackPanel)row.Children[0]).Children.Add(version); toolRows.Children.Add(row);
         }
         tools.Children.Add(SettingsCard(toolRows)); body.Children.Add(tools);
+        var localToolsActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        localToolsActions.Children.Add(ActionButton("选择目录", async (_, _) => {
+            var picker = new FolderPicker(); picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null) await CallAsync("media_tools", new { directory = folder.Path });
+        }));
+        localToolsActions.Children.Add(ActionButton("使用自带", async (_, _) => await CallAsync("media_tools", new { directory = "" })));
+        body.Children.Add(SettingsCard(SettingRow("媒体工具来源", "可选择包含 ffmpeg.exe 和 ffprobe.exe 的本地 x64 目录，验证后切换。", localToolsActions)));
         var options = new StackPanel { Spacing = 0 };
         updateAuto.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "auto", value = updateAuto.IsOn }); };
         updateLock.Toggled += async (_, _) => { if (!loadingSnapshot) await CallAsync("update", new { action = "lock", value = updateLock.IsOn }); };
@@ -215,9 +227,9 @@ public sealed partial class MainWindow
         var cancelling = active && state.Bool("cancel_requested");
         var cancellable = (configured || parser) && active && status is ("checking" or "downloading" or "waiting");
         message.Text = active ? state.String("message")
-            : parser ? "直接更新官方 PyPI 原包，版本与上游一致；依赖变化时单独更新执行环境。" : "完整管理 worker、Python 和配套依赖。";
+            : parser ? "直接更新官方 PyPI 原包，版本与上游一致；依赖变化时单独更新执行环境。" : "仅下载需要变化的组件，验证完整组合后统一切换。";
         check.Content = parser ? "检查官方更新" : "检查环境更新";
-        install.Content = parser ? "安装解析组件" : "安装运行环境";
+        install.Content = parser ? "安装解析组件" : "安装组件更新";
         check.Visibility = cancellable || status == "available" ? Visibility.Collapsed : Visibility.Visible;
         check.IsEnabled = !state.Bool("busy") && (configured || parser && official.String("status") != "checking");
         install.Visibility = active && status == "available" ? Visibility.Visible : Visibility.Collapsed;

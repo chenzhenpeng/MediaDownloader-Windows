@@ -1,0 +1,103 @@
+name: Build and sign independent execution components
+on:
+  workflow_dispatch:
+    inputs:
+      worker_version:
+        type: string
+        required: true
+        default: '0.3.0'
+      runtime_version:
+        type: string
+        required: true
+        default: '1.0.0'
+      tools_version:
+        type: string
+        required: true
+        default: '1.0.0'
+      publish_components:
+        description: Space-separated worker python-runtime media-tools; only changed components need release
+        type: string
+        required: true
+        default: 'worker python-runtime media-tools'
+      sequence:
+        type: number
+        required: true
+        default: 1
+env:
+  PYTHONUTF8: '1'
+permissions:
+  contents: read
+concurrency:
+  group: execution-components
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short -k "not test_ui_keyboard_themes_and_responsive_layout"
+      - run: uv run --no-sync python scripts/fetch_media_tools.py
+      - name: Assemble reviewed build tools and notices
+        run: |
+          New-Item -ItemType Directory -Force build/official-tools,build/notices | Out-Null
+          Copy-Item .cache/media-tools-ci/ffmpeg/bin/ffmpeg.exe,.cache/media-tools-ci/ffmpeg/bin/ffprobe.exe build/official-tools
+          Copy-Item .cache/media-tools-ci/ffmpeg/LICENSE build/notices/FFmpeg-LICENSE
+          Copy-Item .cache/media-tools-ci/ffmpeg/README.txt build/notices/FFmpeg-README.txt
+      - run: uv run --no-sync python scripts/build_official_runtime.py --output dist/build-seed --version build-seed --seed-only --tools build/official-tools
+      - name: Build independent component layout and probe complete combination
+        env:
+          WORKER_VERSION: ${{ inputs.worker_version }}
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
+          TOOLS_VERSION: ${{ inputs.tools_version }}
+        run: uv run --no-sync python scripts/build_component_bundle.py --seed dist/build-seed --output dist/component-bundle --worker-version $env:WORKER_VERSION --runtime-version $env:RUNTIME_VERSION --tools-version $env:TOOLS_VERSION
+      - run: uv run --no-sync python scripts/check_component_update.py --bundle dist/component-bundle --root build/component-acceptance
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: reviewed-component-bundle
+          path: dist/component-bundle
+          retention-days: 7
+  sign-drafts:
+    needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    environment: engine-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install uv==0.10.7
+      - run: uv sync --locked
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          name: reviewed-component-bundle
+          path: build/component-bundle
+      - name: Sign only requested changed components and create reviewable drafts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
+          ENGINE_KEY_ID: ${{ vars.ENGINE_KEY_ID }}
+          RELEASE_SEQUENCE: ${{ inputs.sequence }}
+          PUBLISH_COMPONENTS: ${{ inputs.publish_components }}
+        run: |
+          foreach ($kind in $env:PUBLISH_COMPONENTS.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            if ($kind -notin @('worker','python-runtime','media-tools')) { throw 'Unsupported component' }
+            $profile = Get-Content build/component-bundle/profile.json -Raw | ConvertFrom-Json
+            $directory = Join-Path build/component-bundle $profile.components.PSObject.Properties[$kind].Value
+            $metadata = Get-Content (Join-Path $directory component.json) -Raw | ConvertFrom-Json
+            $tag = "$kind-$($metadata.version)"
+            $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/engine.zip"
+            uv run --no-sync python scripts/release_engine.py $directory --output "build/signed/$kind" --key-id $env:ENGINE_KEY_ID --sequence $env:RELEASE_SEQUENCE --artifact-url $url --channel stable
+            if ($LASTEXITCODE -ne 0) { throw 'Component signing failed' }
+            gh release create $tag "build/signed/$kind/engine.zip" "build/signed/$kind/release.json" "build/signed/$kind/release.sig" --draft --latest=false --target $env:GITHUB_SHA --title "$kind $($metadata.version)" --notes 'Independent signed component candidate. Publish only after complete execution-profile acceptance.'
+            if ($LASTEXITCODE -ne 0) { throw 'Component draft publication failed' }
+          }

@@ -33,7 +33,23 @@ def package_release(
     maximum="0.3.0",
     notes=None,
 ):
-    metadata = json.loads((engine_dir / "engine.json").read_text(encoding="utf-8"))
+    if (engine_dir / "component.json").is_file():
+        component = json.loads((engine_dir / "component.json").read_bytes())
+        if component["kind"] not in {"worker", "python-runtime", "media-tools"}:
+            raise ValueError("Official ParseHub is not a custom signed release")
+        from media_downloader import UPSTREAM_SHA
+
+        metadata = {
+            "protocol": PROTOCOL,
+            "target": component["target"],
+            "engine_version": component["version"],
+            "component": component["kind"],
+            "upstream_sha": os.environ.get("GITHUB_SHA", UPSTREAM_SHA),
+            "patchset": "split-components",
+        }
+        minimum, maximum = "0.3.0.dev1", "0.4.0"
+    else:
+        metadata = json.loads((engine_dir / "engine.json").read_text(encoding="utf-8"))
     if metadata.get("component") == "parsehub" and Version(minimum) < Version("0.2.0.dev6"):
         minimum = "0.2.0.dev6"
     if metadata.get("adapter_abi") and Version(minimum) < Version("0.2.0.dev11"):
@@ -79,6 +95,8 @@ def package_release(
             parsehub_version=metadata["parsehub_version"],
             windows_revision=metadata["engine_version"],
         )
+    elif metadata.get("component") in {"worker", "python-runtime", "media-tools"}:
+        manifest["component"] = metadata["component"]
     elif metadata.get("runtime_id"):
         manifest["runtime_id"] = metadata["runtime_id"]
         manifest["parser_component_version"] = metadata.get(

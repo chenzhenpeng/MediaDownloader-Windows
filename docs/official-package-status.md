@@ -1,8 +1,8 @@
 # Official ParseHub packages
 
-Preview 14 uses the original PyPI ParseHub wheel in a separate embedded execution environment. Package source is not patched or rebuilt by this project. The visible ParseHub version is the upstream version, initially 2.4.0.
+Version 0.3 uses the original PyPI ParseHub wheel in a separate embedded execution environment. Package source is not patched or rebuilt by this project. The visible ParseHub version is the upstream version, initially 2.4.0.
 
-This baseline uses `%LOCALAPPDATA%/MediaDownloader/v5`. Earlier engine selections, tasks, settings and credentials are not imported; their files are left untouched. Configure settings and Cookies again after installing.
+This baseline uses `%LOCALAPPDATA%/MediaDownloader/v6`. Earlier engine selections, tasks, settings and credentials are not imported; their files are left untouched. Configure settings and Cookies again after installing.
 
 ## Independent update path
 
@@ -18,7 +18,7 @@ Python, worker code and dependencies remain independently signed runtime release
 
 If upstream Python requirements, dependency versions or extras no longer match the selected environment, installation stops and requests an execution-environment update. It does not silently upgrade dependencies or replace the application. The environment contains OpenCV/NumPy because the unmodified upstream package requires them; a small ParseHub update does not redownload those dependencies.
 
-`.github/workflows/engine-release.yml` builds and signs execution environments on GitHub Actions; local construction is optional. `.github/workflows/upstream-watch.yml` monitors PyPI without modifying a fork, replaying patches or republishing parser code. The former parser-repackaging release workflow has been removed.
+`.github/workflows/components-release.yml` builds and signs execution environments on GitHub Actions; local construction is optional. `.github/workflows/upstream-watch.yml` monitors PyPI without modifying a fork, replaying patches or republishing parser code. The former parser-repackaging release workflow has been removed.
 
 ## Validation limits
 

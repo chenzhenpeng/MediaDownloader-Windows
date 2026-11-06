@@ -81,23 +81,25 @@ def main():
     parser.add_argument("--describe", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--official-package-dir", type=Path)
+    for option in ("--runtime-dir", "--worker-dir", "--parser-dir", "--tools-dir"):
+        parser.add_argument(option, type=Path, required=True)
     args = parser.parse_args()
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="strict")
-    root = Path(sys.executable).resolve().parent
-    descriptor = json.loads((root / "engine.json").read_bytes())
-    version, upstream = descriptor["engine_version"], descriptor["upstream_sha"]
-    expected = descriptor["parsehub_version"]
-    if args.official_package_dir:
-        # Parent task service validates the receipt and every wheel byte before launch.
-        directory = args.official_package_dir.resolve(strict=True)
-        receipt = json.loads((directory.parent / "official-wheel.json").read_bytes())
-        expected = version = receipt["wheel"]["version"]
-        upstream = receipt["wheel"]["sha256"]
-        sys.path.insert(0, str(directory))
-    else:
-        directory = root / "Lib/site-packages"
+    runtime = args.runtime_dir.resolve(strict=True)
+    worker_root = args.worker_dir.resolve(strict=True)
+    parser_root = args.parser_dir.resolve(strict=True)
+    tools = args.tools_dir.resolve(strict=True)
+    if Path(sys.executable).resolve().parent != runtime:
+        raise ValueError("Unexpected Python runtime")
+    if not Path(__file__).resolve().is_relative_to(worker_root / "app"):
+        raise ValueError("Unexpected worker code origin")
+    descriptor = json.loads((worker_root / "component.json").read_bytes())
+    package = json.loads((parser_root / "component.json").read_bytes())
+    version, upstream = descriptor["version"], package["wheel"]["sha256"]
+    directory = parser_root / "python"
+    expected = package["version"]
+    sys.path.insert(0, str(directory))
     import parsehub
 
     if (
@@ -105,18 +107,21 @@ def main():
         or importlib.metadata.version("parsehub") != expected
     ):
         raise ValueError("Official package identity mismatch")
-    tools = root / "tools"
     for name in ("ffmpeg.exe", "ffprobe.exe"):
         if not (tools / name).is_file():
             raise ValueError("Media tool is missing")
     os.environ["PATH"] = str(tools) + os.pathsep + os.environ.get("PATH", "")
+    # Describe/self-test also verify the complete service import closure.
+    from . import worker
+    from .engine_server import serve
+    from .official_adapter import OfficialAdapter
     from .official_bridge import discover_capabilities
 
     report = {
         "protocol": PROTOCOL,
         "engine_version": version,
         "upstream_sha": upstream,
-        "runtime_layout": "official-embedded",
+        "runtime_layout": "split-components",
         "frozen": False,
         "platform_count": len(discover_capabilities()),
         "capabilities": [item.to_dict() for item in discover_capabilities()],
@@ -130,10 +135,6 @@ def main():
         return 0
     if not args.serve:
         raise ValueError("Worker requires an explicit command")
-    from . import worker
-    from .engine_server import serve
-    from .official_adapter import OfficialAdapter
-
     worker.ENGINE_VERSION, worker.UPSTREAM_SHA = version, upstream
     execute = functools.partial(
         worker.execute, adapter_factory=functools.partial(OfficialAdapter, official_runtime=True)

@@ -23,12 +23,12 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     from . import PROTOCOL
+    from .component_store import ComponentStore as EngineStore
     from .engine import resolve_engine
     from .storage import Store, data_directory
     from .ui import MainWindow, apply_theme
     from .update_contracts import Trust, UpdateError, load_trust
     from .update_manager import default_trust_file
-    from .update_store import EngineStore
 
     app = QApplication(sys.argv[:1])
     from .localization import install_chinese

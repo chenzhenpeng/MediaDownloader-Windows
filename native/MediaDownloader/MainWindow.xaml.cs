@@ -138,13 +138,15 @@ public sealed partial class MainWindow : Window
         nextPage.IsEnabled = value.Number("offset") + 50 < value.Number("total");
         ApplyUpdateState(value.GetProperty("update"));
         componentVersions.Text = $"版本 {value.String("parser_version", "未知")} · 官方 PyPI 原包";
-        runtimeVersions.Text = $"环境 {value.String("runtime_version", value.String("engine_version"))} · {(value.String("environment_source") == "managed" ? "应用管理" : "随应用提供")}";
+        runtimeVersions.Text = "Worker、Python 环境和媒体工具分别管理，切换与回滚以完整组合为单位。";
+        workerVersionInfo.Text = value.String("worker_version", "未知");
+        pythonVersionInfo.Text = value.String("runtime_version", "未知");
         if (value.TryGetProperty("media_tools", out var tools)) {
             static string ShortVersion(string version) { var parts = version.Split(' ', StringSplitOptions.RemoveEmptyEntries); return parts.Length > 2 && parts[1] == "version" ? parts[2] : version; }
-            ffmpegVersions.Text = $"FFmpeg {ShortVersion(tools.String("ffmpeg", "未知"))} · ffprobe {ShortVersion(tools.String("ffprobe", "未知"))} · 随环境提供";
+            ffmpegVersions.Text = $"FFmpeg {ShortVersion(tools.String("ffmpeg", "未知"))} · ffprobe {ShortVersion(tools.String("ffprobe", "未知"))} · {(value.String("media_tools_source") == "local" ? "本地目录" : "独立工具包")}";
             ytdlpVersions.Text = $"{tools.String("yt-dlp", "版本未知")} · 随环境提供";
         }
-        versionText.Text = $"应用包 {value.String("client_version")} · ParseHub {value.String("parser_version", "未知")} · Windows 兼容修订 {value.String("parser_component_version")} · 执行环境 {value.String("runtime_version")}";
+        versionText.Text = $"应用 {value.String("client_version")} · Worker {value.String("worker_version")} · ParseHub {value.String("parser_version", "未知")} · Python 环境 {value.String("runtime_version")}";
         var clientVersion = value.String("client_version"); var devIndex = clientVersion.IndexOf(".dev", StringComparison.Ordinal);
         productVersion.Text = devIndex >= 0 ? $"版本 {clientVersion[..devIndex]} · 预览版 {clientVersion[(devIndex + 4)..]}" : $"版本 {clientVersion}";
         loadingSnapshot = false;

@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: component-catalog-stable
+  group: component-catalog-components-v1
   cancel-in-progress: false
 jobs:
   renew:
@@ -26,7 +26,7 @@ jobs:
       - name: Fetch fixed channel metadata
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download channel-stable --pattern catalog.json --pattern catalog.sig --dir build/catalog
+        run: gh release download channel-components-v1 --pattern catalog.json --pattern catalog.sig --dir build/catalog
       - name: Renew signatures and expiry without rebuilding artifacts
         env:
           ENGINE_SIGNING_KEY_PEM: ${{ secrets.ENGINE_SIGNING_KEY_PEM }}
@@ -34,4 +34,4 @@ jobs:
       - name: Publish renewed catalog pair
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload channel-stable build/catalog/catalog.json build/catalog/catalog.sig --clobber
+        run: gh release upload channel-components-v1 build/catalog/catalog.json build/catalog/catalog.sig --clobber

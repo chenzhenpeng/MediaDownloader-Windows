@@ -6,7 +6,7 @@ on:
         description: Space-separated already published and accepted runtime/parser release tags
         type: string
         required: true
-        default: 'engine-0.2.1'
+        default: 'worker-0.3.0 python-runtime-1.0.0 media-tools-1.0.0'
       sequence:
         description: Greater than every previously published stable catalog sequence
         type: number
@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: component-catalog-stable
+  group: component-catalog-components-v1
   cancel-in-progress: false
 jobs:
   publish:
@@ -39,7 +39,7 @@ jobs:
           $tags = $env:RELEASE_TAGS.Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries)
           if ($tags.Count -lt 1 -or $tags.Count -gt 200) { throw 'Invalid component count' }
           foreach ($tag in $tags) {
-            if ($tag -notmatch '^engine-[A-Za-z0-9][A-Za-z0-9._-]{0,47}$') { throw 'Invalid release tag' }
+            if ($tag -notmatch '^(worker|python-runtime|media-tools)-[A-Za-z0-9][A-Za-z0-9._-]{0,47}$') { throw 'Invalid release tag' }
             $release = gh release view $tag --json isDraft | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0 -or $release.isDraft) { throw 'Components must pass acceptance and be published first' }
             gh release download $tag --pattern release.json --pattern release.sig --dir "build/catalog-input/$tag"
@@ -53,9 +53,9 @@ jobs:
         run: |
           $directories = @(Get-ChildItem build/catalog-input -Directory | ForEach-Object { $_.FullName })
           $previous = @()
-          gh release view channel-stable --json tagName 2>$null
+          gh release view channel-components-v1 --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release download channel-stable --pattern catalog.json --pattern catalog.sig --dir build/previous-catalog
+            gh release download channel-components-v1 --pattern catalog.json --pattern catalog.sig --dir build/previous-catalog
             if ($LASTEXITCODE -ne 0) { throw 'Previous catalog download failed' }
             $previous = @('--previous', 'build/previous-catalog')
           }
@@ -65,10 +65,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view channel-stable --json tagName 2>$null
+          gh release view channel-components-v1 --json tagName 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create channel-stable --target $env:GITHUB_SHA --latest=false --title 'Stable component update catalog' --notes 'Signed discovery catalog. Runtime and parser artifacts remain in immutable versioned releases.'
+            gh release create channel-components-v1 --target $env:GITHUB_SHA --latest=false --title 'Stable component update catalog' --notes 'Signed discovery catalog. Runtime and parser artifacts remain in immutable versioned releases.'
             if ($LASTEXITCODE -ne 0) { throw 'Channel creation failed' }
           }
-          gh release upload channel-stable build/catalog/catalog.json build/catalog/catalog.sig --clobber
+          gh release upload channel-components-v1 build/catalog/catalog.json build/catalog/catalog.sig --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Catalog publication failed' }

@@ -17,8 +17,8 @@ def main():
     lock = json.loads((ROOT / "packaging/media-tools-lock.json").read_bytes())
     groups = defaultdict(int)
     files = [p for p in payload.rglob("*") if p.is_file()]
-    engine = json.loads((payload / "engine/engine.json").read_bytes())
-    official = engine.get("layout") == "official-embedded"
+    profile = json.loads((payload / "engine/profile.json").read_bytes())
+    components = {kind: payload / "engine" / relative for kind, relative in profile["components"].items()}
     for path in files:
         relative = path.relative_to(payload)
         group = relative.parts[0] if len(relative.parts) > 1 else "client"
@@ -31,19 +31,21 @@ def main():
             "qt6widgets.dll",
         }, f"Unused dependency returned: {relative}"
         if any(part.casefold() in {"numpy", "cv2"} for part in relative.parts):
-            assert official and relative.parts[0] == "engine", relative
-    tools = payload / "engine/tools"
+            assert path.is_relative_to(components["python-runtime"]), relative
+    tools = components["media-tools"]
     assert not (tools / "_internal").exists(), "Duplicated yt-dlp runtime returned"
     assert not list(tools.glob("*.dll")), "Old shared FFmpeg DLLs survived the clean build"
     expected_tools = {
         "ffmpeg.exe": lock["ffmpeg"]["ffmpeg_sha256"],
         "ffprobe.exe": lock["ffmpeg"]["ffprobe_sha256"],
     }
-    if official:
-        assert not (tools / "yt-dlp.exe").exists(), "Duplicate yt-dlp executable returned"
-        assert (payload / "engine/Lib/site-packages/yt_dlp/__init__.py").is_file()
-    else:
-        expected_tools["yt-dlp.exe"] = lock["yt-dlp"]["sha256"]
+    assert not (tools / "yt-dlp.exe").exists(), "Duplicate yt-dlp executable returned"
+    python = components["python-runtime"]
+    assert (python / "Lib/site-packages/yt_dlp/__init__.py").is_file()
+    assert not (python / "Lib/site-packages/parsehub").exists(), "Parser leaked into Python environment"
+    assert not (python / "app").exists(), "Worker leaked into Python environment"
+    assert not (components["worker"] / "app/media_downloader/repository.py").exists()
+    assert not (components["worker"] / "app/media_downloader/ui.py").exists()
     for name, expected in expected_tools.items():
         assert hashlib.file_digest((tools / name).open("rb"), "sha256").hexdigest() == expected
     installer = ROOT / f"dist/release/MediaDownloader-{RELEASE}-win-x64-Setup.exe"
@@ -52,6 +54,8 @@ def main():
         "passed": True,
         "uncompressed_bytes": sum(groups.values()),
         "groups_bytes": {k: v for k, v in groups.items() if v > 1024**2},
+        "components_bytes": {kind: sum(p.stat().st_size for p in root.rglob("*") if p.is_file())
+                             for kind, root in components.items()},
         "installer_bytes": installer.stat().st_size if installer.exists() else None,
         "previous_installer_bytes": previous.stat().st_size if previous.exists() else None,
         "largest_files": [
