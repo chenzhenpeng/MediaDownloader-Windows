@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -72,7 +73,17 @@ class UpdateFeed:
                     else:
                         fail("UPDATE_NETWORK", "更新地址跳转次数过多。")
         except httpx.HTTPError as exc:
-            raise UpdateError("UPDATE_NETWORK", "无法连接更新源，请检查网络后重试。") from exc
+            status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            message = (
+                "更新文件暂时不可用，请稍后重试。"
+                if status == 404
+                else "更新源暂时限制访问，请稍后重试。"
+                if status in {403, 429}
+                else "更新源响应超时，请稍后重试。"
+                if isinstance(exc, httpx.TimeoutException)
+                else "连接更新源失败，请检查网络或稍后重试。"
+            )
+            raise UpdateError("UPDATE_NETWORK", message) from exc
 
     def artifact_chunks(self, url, total, *, cancelled=lambda: False):
         block = 4 * 1024**2
@@ -114,12 +125,31 @@ class UpdateFeed:
                     pending.append(pool.submit(fetch, start))
 
     def bounded(self, url, maximum, *, cancelled=lambda: False):
-        data = bytearray()
-        for chunk in self.chunks(url, cancelled=cancelled):
-            data.extend(chunk)
-            if len(data) > maximum:
-                fail("UPDATE_MANIFEST", "更新清单超出大小限制。")
-        return bytes(data)
+        for attempt in range(3):
+            data = bytearray()
+            try:
+                for chunk in self.chunks(url, cancelled=cancelled):
+                    data.extend(chunk)
+                    if len(data) > maximum:
+                        fail("UPDATE_MANIFEST", "更新清单超出大小限制。")
+                return bytes(data)
+            except UpdateError as exc:
+                cause = exc.__cause__
+                retryable = isinstance(
+                    cause, (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
+                ) or (
+                    isinstance(cause, httpx.HTTPStatusError)
+                    and cause.response.status_code in {408, 500, 502, 503, 504}
+                )
+                if not retryable or attempt == 2:
+                    raise
+                # Restart metadata from byte zero; never append a partial response
+                # to a retried manifest or weaken signature/size validation.
+                deadline = time.monotonic() + (0.25, 0.75)[attempt]
+                while time.monotonic() < deadline:
+                    if cancelled():
+                        fail("UPDATE_CANCELLED", "更新已取消。")
+                    time.sleep(0.05)
 
     def check(self, *, cancelled=lambda: False):
         if not self.trust.configured:

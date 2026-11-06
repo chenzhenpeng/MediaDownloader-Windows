@@ -25,3 +25,7 @@ If upstream Python requirements, dependency versions or extras no longer match t
 Live acceptance covers public Douyin and Kuaishou video tasks and a Xiaohongshu album with paired Live Photos. Weixin Channels correctly requires local Yuanbao credentials; authenticated Channels download is not established by those tests. Other upstream platforms are discoverable through the adapter but are not all covered by live acceptance. A future upstream API change can still fail the compatibility probe and require an adapter/runtime update.
 
 Local task databases, samples, credentials and signing private keys are not published.
+
+## Preview 15 network correction
+
+Runtime-catalog metadata checks retry transient connection failures and HTTP 408/500/502/503/504 up to three times, with cancellable bounded delays. Each attempt starts from byte zero; signature checks and maximum response sizes remain unchanged. Permanent access/not-found errors are not retried. User-facing messages distinguish unavailable files, access limits and timeouts without displaying implementation error codes. Execution environment 0.2.0 and ParseHub 2.4.0 are reused.

@@ -28,6 +28,8 @@ ParseHub updates download the original stable wheel directly from official PyPI,
 
 Daily client checks and read-only upstream monitoring inspect PyPI. Parser updates reuse a matching execution environment, and dependency changes request a separate runtime update. GitHub Actions can build and sign execution environments without a local build. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
 
+Preview 15 adds bounded retries for transient runtime-catalog connection failures and clearer update messages. It reuses execution environment 0.2.0 and official ParseHub 2.4.0; Preview 14 settings in the v5 data directory remain usable.
+
 ## Documentation and licensing
 
 [Component architecture](docs/components.md) | [Development plan](docs/development-plan.md) | [Patch maintenance](docs/upstream-patches.md) | [Platform coverage](docs/platforms-integration.md)

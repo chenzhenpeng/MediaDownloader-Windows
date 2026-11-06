@@ -274,7 +274,7 @@ class UpdateManager(QObject):
                     self._set("waiting", "候选内核已验证，等待当前任务结束后切换。")
             except UpdateError as exc:
                 self._set(
-                    "idle" if exc.code == "UPDATE_CANCELLED" else "failed", f"{exc.message}（{exc.code}）"
+                    "idle" if exc.code == "UPDATE_CANCELLED" else "failed", exc.message
                 )
             except Exception as exc:
                 import traceback
