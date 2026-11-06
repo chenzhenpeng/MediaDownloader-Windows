@@ -28,7 +28,7 @@ def main():
     args.root.mkdir(parents=True)
     bundled = resolve_engine(args.bundle.resolve())
     source = args.root / "worker"
-    shutil.copytree(bundled.components["worker"], source)
+    shutil.copytree(bundled.components["worker"], source, ignore=shutil.ignore_patterns("files.json"))
     metadata = json.loads((source / "component.json").read_bytes())
     # A controlled higher worker version exercises update selection without inventing an upstream release.
     metadata["version"] = "0.3.1"
