@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -20,8 +21,24 @@ sys.path.insert(0, str(ROOT / "src"))
 from media_downloader import PROTOCOL  # noqa: E402
 from media_downloader.engine import resolve_engine  # noqa: E402
 from media_downloader.engine_health import probe_engine  # noqa: E402
-from media_downloader.official_packages import check_latest, download_wheel, inspect_wheel  # noqa: E402
+from media_downloader.official_packages import download_wheel, inspect_wheel, wheel_from_metadata  # noqa: E402
 from media_downloader.update_archive import no_reparse, safe_relative  # noqa: E402
+
+
+def pinned_wheel(version):
+    if not re.fullmatch(r"\d+(?:\.\d+){1,3}", version):
+        raise ValueError("Invalid locked ParseHub version")
+    # Worker/environment builds use the locked baseline, independently of newer
+    # wheels that clients may already have selected directly from PyPI.
+    with httpx.Client(timeout=30, follow_redirects=False, trust_env=False) as client:
+        response = client.get("https://pypi.org/pypi/parsehub/" + version + "/json")
+        response.raise_for_status()
+        if len(response.content) > 2 * 1024**2:
+            raise ValueError("Oversize pinned package metadata")
+        wheel = wheel_from_metadata(response.content)
+    if wheel.version != version:
+        raise ValueError("Pinned official package version mismatch")
+    return wheel
 
 
 def build(output, version, tools, *, seed_only=False):
@@ -124,9 +141,7 @@ def build(output, version, tools, *, seed_only=False):
             "python-slugify": ["unidecode"],
         },
     )
-    wheel = check_latest()
-    if wheel.version != contract["dependencies"].get("parsehub"):
-        raise ValueError("Upstream advanced; review and refresh the dependency lock first")
+    wheel = pinned_wheel(contract["dependencies"]["parsehub"])
     original = cache / wheel.filename
     if not original.exists():
         download_wheel(wheel, original)

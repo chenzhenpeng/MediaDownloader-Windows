@@ -32,7 +32,7 @@ Settings supports an explicitly selected local x64 FFmpeg/ffprobe directory. Bot
 
 `components-release.yml` builds and signs requested components in GitHub Actions. `application-release.yml` consumes authenticated components and the original SDK. Repository Latest is reserved for the client installer. Old client/data layouts are not migrated. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
 
-Validation: 393 regression tests passed, with the interactive native/Qt UI test excluded from the headless run. Real acceptance covered a signed Worker-only update of about 33 KiB with large component directories reused, restart recovery, explicit local tools, interrupted-switch rollback, and a complete Kuaishou HLS video through the frozen backend. Initial full-installer size is not expected to fall proportionally: the large environment and media binaries are still needed for offline use.
+Validation: 397 regression tests passed, with the interactive native/Qt UI test excluded from the headless run. Real acceptance covered a signed Worker-only update of about 33 KiB with large component directories reused, restart recovery, explicit local tools, interrupted-switch rollback, and a complete Kuaishou HLS video through the frozen backend. Initial full-installer size is not expected to fall proportionally: the large environment and media binaries are still needed for offline use.
 
 ## Documentation and licensing
 
