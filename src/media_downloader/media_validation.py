@@ -13,7 +13,7 @@ def validate_media_payloads(files):
         if header.startswith(b"#EXTM3U") or b"<MPD" in header:
             raise AppError(
                 "STREAM_NOT_DOWNLOADED",
-                "下载地址返回了分段播放列表，尚未取得完整视频，请更新内核或重试。",
+                "未能取得完整分段视频，请更新执行环境后重试。",
                 "check_engine",
             )
         if header.lower().startswith((b"<!doctype html", b"<html", b"<head")):

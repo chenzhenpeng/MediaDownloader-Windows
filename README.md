@@ -28,6 +28,8 @@ ParseHub updates download the original stable wheel directly from official PyPI,
 
 Daily client checks and read-only upstream monitoring inspect PyPI. Parser updates reuse a matching execution environment, and dependency changes request a separate runtime update. GitHub Actions can build and sign execution environments without a local build. Signing runs in the protected `engine-release` environment; private keys and user Cookies are never committed.
 
+Execution runtime 0.2.1 adds bounded download and local remuxing for finite unencrypted MPEG-TS HLS returned by the original SDK. Every segment and redirect passes the application URL guard; FFmpeg reads local transport-stream bytes only, and ffprobe checks video presence and duration before commit. Live, encrypted and unsupported playlists fail explicitly. The official ParseHub wheel remains 2.4.0 and unchanged. This fix is delivered through the execution-environment updater without replacing the client installer. Regression validation: 383 tests passed, with the native interactive UI test excluded from the headless run.
+
 Preview 15 adds bounded retries for transient runtime-catalog connection failures and clearer update messages. It reuses execution environment 0.2.0 and official ParseHub 2.4.0; Preview 14 settings in the v5 data directory remain usable.
 
 ## Documentation and licensing

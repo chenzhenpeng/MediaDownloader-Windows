@@ -6,7 +6,7 @@ on:
         description: Accepted signed execution runtime to bundle
         required: true
         type: string
-        default: '0.2.0'
+        default: '0.2.1'
 permissions:
   contents: read
 jobs:

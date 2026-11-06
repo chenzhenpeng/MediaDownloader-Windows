@@ -6,7 +6,7 @@ on:
         description: Space-separated already published and accepted runtime/parser release tags
         type: string
         required: true
-        default: 'engine-0.2.0'
+        default: 'engine-0.2.1'
       sequence:
         description: Greater than every previously published stable catalog sequence
         type: number

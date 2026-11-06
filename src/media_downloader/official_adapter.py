@@ -85,6 +85,17 @@ class OfficialAdapter:
             if payload is not None:
                 await progress(payload)
 
-        return await asyncio.wait_for(
+        downloaded = await asyncio.wait_for(
             result.download(directory, proxy=self.proxy, callback=callback, connections=2, concurrency=2), 600
         )
+        from parsehub.types import VideoRef
+
+        from .hls_transfer import recover_playlist
+
+        if isinstance(result.media, VideoRef):
+            files = list(downloaded.output_dir.glob("*.mp4"))
+            if len(files) == 1:
+                await asyncio.wait_for(
+                    recover_playlist(files[0], result.media.url, callback, proxy=self.proxy), 600
+                )
+        return downloaded
