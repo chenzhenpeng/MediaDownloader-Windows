@@ -26,6 +26,8 @@ Python 暂只支持完整环境包，不自动修改系统 Python。yt-dlp 暂�
 
 ## 构建和发布
 
+本地与 CI 共用 `build.ps1` / `scripts/build_windows.py`，自动准备工具、许可与官方组合；构建完成前运行原始 wheel 契约及组合更新验收。PR 另编译 WinUI 和冻结后端，历史补丁重放不作为当前发布包的验收。
+
 - `build_official_runtime.py --seed-only` 从官方 Python 和哈希锁创建构建种子，不作为客户端布局发布。
 - `build_component_bundle.py` 分离组件和原始 wheel，生成离线组合并探测。
 - `components-release.yml` 在 GitHub Actions 构建、签名指定的变化组件，生成独立草稿。

@@ -1,5 +1,6 @@
 """Fetch the exact reviewed tools used by local and GitHub runtime builds."""
 
+import argparse
 import hashlib
 import json
 import shutil
@@ -34,13 +35,18 @@ def fetch(url, path, expected):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, default=ROOT / ".cache/media-tools-ci")
+    parser.add_argument("--sevenzip", type=Path)
+    parser.add_argument("--ffmpeg-only", action="store_true")
+    args = parser.parse_args()
     lock = json.loads((ROOT / "packaging/media-tools-lock.json").read_bytes())
-    root = ROOT / ".cache/media-tools-ci"
+    root = args.output.resolve()
     no_reparse(root)
     root.mkdir(parents=True, exist_ok=False)
     archive = root / "ffmpeg.7z"
     fetch(lock["ffmpeg"]["url"], archive, lock["ffmpeg"]["sha256"])
-    tool = shutil.which("7z")
+    tool = str(args.sevenzip.resolve(strict=True)) if args.sevenzip else shutil.which("7z")
     if not tool:
         raise RuntimeError("The build runner requires 7-Zip")
     # Extraction is permitted only after authenticating the entire pinned archive.
@@ -61,8 +67,9 @@ def main():
         shutil.copy2(file, destination / "bin" / file.name)
     for name in ("LICENSE", "README.txt"):
         shutil.copy2(source / name, destination / name)
-    fetch(lock["yt-dlp"]["url"], root / "yt-dlp.exe", lock["yt-dlp"]["sha256"])
-    print("Verified FFmpeg, ffprobe and yt-dlp against media-tools-lock.json")
+    if not args.ffmpeg_only:
+        fetch(lock["yt-dlp"]["url"], root / "yt-dlp.exe", lock["yt-dlp"]["sha256"])
+    print("Verified media tools against media-tools-lock.json")
 
 
 if __name__ == "__main__":

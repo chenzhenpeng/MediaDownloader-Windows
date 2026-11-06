@@ -42,25 +42,17 @@ jobs:
       - run: python -m pip install uv==0.10.7
       - run: uv sync --locked
       - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short -k "not test_ui_keyboard_themes_and_responsive_layout"
-      - run: uv run --no-sync python scripts/fetch_media_tools.py
-      - name: Assemble reviewed build tools and notices
-        run: |
-          New-Item -ItemType Directory -Force build/official-tools,build/notices | Out-Null
-          Copy-Item .cache/media-tools-ci/ffmpeg/bin/ffmpeg.exe,.cache/media-tools-ci/ffmpeg/bin/ffprobe.exe build/official-tools
-          Copy-Item .cache/media-tools-ci/ffmpeg/LICENSE build/notices/FFmpeg-LICENSE
-          Copy-Item .cache/media-tools-ci/ffmpeg/README.txt build/notices/FFmpeg-README.txt
-      - run: uv run --no-sync python scripts/build_official_runtime.py --output dist/build-seed --version build-seed --seed-only --tools build/official-tools
-      - name: Build independent component layout and probe complete combination
+      - name: Build and verify official independent components
         env:
           WORKER_VERSION: ${{ inputs.worker_version }}
           RUNTIME_VERSION: ${{ inputs.runtime_version }}
           TOOLS_VERSION: ${{ inputs.tools_version }}
-        run: uv run --no-sync python scripts/build_component_bundle.py --seed dist/build-seed --output dist/component-bundle --worker-version $env:WORKER_VERSION --runtime-version $env:RUNTIME_VERSION --tools-version $env:TOOLS_VERSION
-      - run: uv run --no-sync python scripts/check_component_update.py --bundle dist/component-bundle --root build/component-acceptance
+        run: uv run --no-sync python scripts/build_windows.py --stage components --work-dir .local/component-build --worker-version $env:WORKER_VERSION --runtime-version $env:RUNTIME_VERSION --tools-version $env:TOOLS_VERSION
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: reviewed-component-bundle
-          path: dist/component-bundle
+          path: .local/component-build/bundle
+          include-hidden-files: true
           retention-days: 7
   sign-drafts:
     needs: build

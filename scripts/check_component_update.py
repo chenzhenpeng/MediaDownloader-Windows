@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from packaging.version import Version
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "scripts")]
@@ -31,7 +32,8 @@ def main():
     shutil.copytree(bundled.components["worker"], source, ignore=shutil.ignore_patterns("files.json"))
     metadata = json.loads((source / "component.json").read_bytes())
     # A controlled higher worker version exercises update selection without inventing an upstream release.
-    metadata["version"] = "0.3.1"
+    current_version = Version(metadata["version"])
+    metadata["version"] = f"{current_version.major}.{current_version.minor}.{current_version.micro + 1}"
     (source / "component.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     key = Ed25519PrivateKey.generate()
     feed = args.root / "feed"

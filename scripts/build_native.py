@@ -40,6 +40,8 @@ def main():
     if target.exists():
         shutil.rmtree(target)
     OUT.mkdir(parents=True)
+    for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+        shutil.copy2(ROOT / notice, OUT / notice)
     dotnet = ROOT / ".cache/dotnet/dotnet.exe"
     sdk = str(dotnet) if dotnet.is_file() else shutil.which("dotnet")
     if not sdk:
@@ -48,7 +50,7 @@ def main():
         [
             sdk,
             "publish",
-            "native/MediaDownloader/MediaDownloader.csproj",
+            str(ROOT / "native/MediaDownloader/MediaDownloader.csproj"),
             "--no-restore",
             "-c",
             "Release",
@@ -56,7 +58,7 @@ def main():
             "-o",
             str(OUT),
         ],
-        cwd=ROOT,
+        cwd=ROOT / "native",
         env=env,
         check=True,
     )

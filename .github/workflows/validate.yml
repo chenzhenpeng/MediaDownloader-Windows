@@ -6,7 +6,8 @@ on:
 permissions:
   contents: read
 jobs:
-  validate:
+  application-regressions:
+    name: Application and historical adapter regressions
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -16,17 +17,31 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install uv==0.10.7
       - run: uv sync --locked
-      - run: uv run --no-sync ruff check src tests scripts packaging
+      - run: uv run --no-sync ruff check src tests scripts packaging qa/official
       # Hosted runners have no interactive desktop; keyboard focus is checked locally.
       - run: uv run --no-sync pytest tests upstream-ParseHub/test -q --tb=short -k "not test_ui_keyboard_themes_and_responsive_layout"
-      - name: Replay reviewed patches without executing candidate source
-        shell: pwsh
-        run: |
-          git clone --bare https://github.com/z-mio/ParseHub.git .cache/upstream-baseline
-          $candidateSha = uv run --no-sync python -c "from media_downloader import UPSTREAM_SHA; print(UPSTREAM_SHA)"
-          uv run --no-sync python scripts/sync_upstream.py --source .cache/upstream-baseline --sha $candidateSha --report review/ci-patch-replay.json
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+  official-release-contracts:
+    name: Official SDK and Windows x64 build
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          global-json-file: native/global.json
+      - run: python -m pip install uv==0.10.7
+      - name: Build from locked official artifacts and test the shipping environment
+        run: ./build.ps1 -Stage app -WorkDir .local/pr-build
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: always()
         with:
-          name: validation-evidence
-          path: review/ci-patch-replay.json
+          name: official-sdk-and-native-build-evidence
+          path: |
+            .local/pr-build/official-contract.json
+            .local/pr-build/update-acceptance/report.json
+            .local/pr-build/build-report.json
+          include-hidden-files: true
+          if-no-files-found: warn
